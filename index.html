@@ -16,7 +16,17 @@
   <script src="https://cdn.tailwindcss.com"></script>
   
   <!-- Lucide Icons (UMD Build) -->
-  <script src="https://unpkg.com/lucide-react@latest/dist/umd/lucide-react.js"></script>
+  <script src="https://unpkg.com/lucide-react@0.330.0/dist/umd/lucide-react.min.js"></script>
+
+  <!-- Leaflet CSS for Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Custom Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
 
   <style>
     body {
@@ -24,6 +34,7 @@
       margin: 0;
       padding: 0;
       -webkit-tap-highlight-color: transparent;
+      font-family: 'Roboto', sans-serif;
     }
     .custom-scrollbar::-webkit-scrollbar {
       width: 6px;
@@ -58,8 +69,7 @@
 <body>
   <div id="root"></div>
 
-  <script type="text/babel">
-    // --- EXTRACT REACT HOOKS ---
+  <script type="text/babel" data-type="module">
     const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
     // --- EXTRACT LUCIDE ICONS ---
@@ -83,7 +93,7 @@
           const date = new Date(year, monthIndex, day);
           
           const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-          const dayStr = "Event"; // Generic fallback
+          const dayStr = "Event"; 
           const cleanText = text.replace(match[0], '').trim();
           
           return { 
@@ -108,7 +118,7 @@
         if (b.includes('white castle')) return 'text-blue-400';
         if (b.includes('levy')) return 'text-red-400';
         if (b.includes('insert coin')) return 'text-purple-400';
-        return 'text-emerald-400'; // Fallback for other potential brands
+        return 'text-emerald-400';
     };
 
     // --- LEAFLET MAP COMPONENT ---
@@ -117,24 +127,37 @@
       const mapInstance = useRef(null);
 
       useEffect(() => {
-        if (!document.getElementById('leaflet-css')) {
-          const link = document.createElement('link');
-          link.id = 'leaflet-css';
-          link.rel = 'stylesheet';
-          link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-          document.head.appendChild(link);
+        const initMap = () => {
+          if (mapInstance.current || !mapRef.current || !window.L) return;
+          const bounds = [[10, -170], [72, -50]];
+          const map = window.L.map(mapRef.current, {
+            maxBounds: bounds,       
+            maxBoundsViscosity: 1.0, 
+            minZoom: 3               
+          }).setView([39.8283, -98.5795], 4); 
+          mapInstance.current = map;
+          
+          const tileLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap',
+            noWrap: true, bounds: bounds
+          });
+          tileLayer.addTo(map);
+
+          if(mapRef.current) {
+              const style = document.createElement('style');
+              style.innerHTML = `
+                .leaflet-tile-pane { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
+                .leaflet-container { background: #0f172a; }
+              `;
+              mapRef.current.appendChild(style);
+          }
+          updateMarkers(map);
+        };
+
+        if (window.L) {
+            initMap();
         }
-        if (!document.getElementById('leaflet-js')) {
-          const script = document.createElement('script');
-          script.id = 'leaflet-js';
-          script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-          script.async = true;
-          script.onload = initMap;
-          document.body.appendChild(script);
-        } else {
-          if (window.L) initMap();
-          else document.getElementById('leaflet-js').onload = initMap;
-        }
+
         return () => {
           if (mapInstance.current) {
             mapInstance.current.remove();
@@ -143,52 +166,22 @@
         };
       }, []);
 
-      const initMap = () => {
-        if (mapInstance.current || !mapRef.current || !window.L) return;
-        const bounds = [[10, -170], [72, -50]];
-        const map = window.L.map(mapRef.current, {
-          maxBounds: bounds,       
-          maxBoundsViscosity: 1.0, 
-          minZoom: 3               
-        }).setView([39.8283, -98.5795], 4); 
-        mapInstance.current = map;
-        
-        const tileLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; OpenStreetMap',
-          noWrap: true, bounds: bounds
-        });
-        tileLayer.addTo(map);
-
-        if(mapRef.current) {
-            const style = document.createElement('style');
-            style.innerHTML = `
-              .leaflet-tile-pane { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
-              .leaflet-container { background: #0f172a; }
-            `;
-            mapRef.current.appendChild(style);
-        }
-        updateMarkers(map);
-      };
-
-      useEffect(() => {
-        if (mapInstance.current && window.L) updateMarkers(mapInstance.current);
-      }, [data]);
-
       const updateMarkers = (map) => {
+        if (!window.L) return;
         map.eachLayer((layer) => {
           if (layer instanceof window.L.Marker) map.removeLayer(layer);
         });
         const bounds = [];
         data.forEach(site => {
           if (site.lat && site.lng) {
-            let color = '#64748b'; // default offline/gray
+            let color = '#64748b'; 
             const s = String(site.status || '').toLowerCase();
             
-            if (s.includes('operating') || s.includes('online')) color = '#10b981'; // emerald-500
-            else if (s.includes('robot down')) color = '#ef4444'; // red-500
-            else if (s.includes('cleaning')) color = '#3b82f6'; // blue-500
-            else if (s.includes('service') || s.includes('progress')) color = '#a855f7'; // purple-500
-            else if (s.includes('manual') || s.includes('voluntarily')) color = '#eab308'; // yellow-500
+            if (s.includes('operating') || s.includes('online')) color = '#10b981'; 
+            else if (s.includes('robot down')) color = '#ef4444'; 
+            else if (s.includes('cleaning')) color = '#3b82f6'; 
+            else if (s.includes('service') || s.includes('progress')) color = '#a855f7'; 
+            else if (s.includes('manual') || s.includes('voluntarily')) color = '#eab308'; 
 
             const icon = window.L.divIcon({
               className: 'custom-marker',
@@ -205,6 +198,10 @@
         });
         if (bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 12 });
       };
+
+      useEffect(() => {
+        if (mapInstance.current && window.L) updateMarkers(mapInstance.current);
+      }, [data]);
 
       return <div ref={mapRef} className="w-full h-full z-0 bg-slate-900 rounded-xl min-h-[600px]" />;
     };
@@ -299,7 +296,6 @@
                     </div>
                     <div className="text-[10px] text-slate-400 uppercase font-bold text-center leading-tight h-6 flex items-center">{label}</div>
                     
-                    {/* Tooltip for Non-Operating Categories */}
                     {!hideTooltip && count > 0 && (
                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] p-3 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded shadow-xl z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
                             <div className="font-bold text-[#a855f7] border-b border-slate-800 pb-1 mb-1">{label} Sites:</div>
@@ -323,7 +319,6 @@
                     <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">{total} Total Active Units</div>
                 </div>
 
-                {/* Stacked Bar */}
                 <div className="w-full h-3 flex rounded-full overflow-hidden mb-6 bg-slate-800">
                     {categorizedSites.operating.length > 0 && <div style={{width: `${(categorizedSites.operating.length/total)*100}%`}} className="bg-emerald-500 transition-all duration-1000" title={`Operating: ${categorizedSites.operating.length}`} />}
                     {categorizedSites.service.length > 0 && <div style={{width: `${(categorizedSites.service.length/total)*100}%`}} className="bg-[#a855f7] transition-all duration-1000" title={`Service: ${categorizedSites.service.length}`} />}
@@ -333,7 +328,6 @@
                     {categorizedSites.offline.length > 0 && <div style={{width: `${(categorizedSites.offline.length/total)*100}%`}} className="bg-slate-500 transition-all duration-1000" title={`Offline: ${categorizedSites.offline.length}`} />}
                 </div>
 
-                {/* Grid Legend */}
                 <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
                     <StatItem label="Operating" sites={categorizedSites.operating} colorClass="text-emerald-400" dotClass="bg-emerald-500 text-emerald-500" hideTooltip={true} />
                     <StatItem label="Service In Progress" sites={categorizedSites.service} colorClass="text-[#a855f7]" dotClass="bg-[#a855f7] text-[#a855f7]" />
@@ -425,7 +419,6 @@
       const events = useMemo(() => {
         const all = [];
         fleetData.forEach(site => {
-          // Process Upcoming Events
           if (site.upcoming && site.upcoming.trim() !== '') {
             site.upcoming.split('|').forEach(entry => {
               const trimmed = entry.trim();
@@ -446,7 +439,6 @@
             });
           }
           
-          // Process History Events
           if (site.history && Array.isArray(site.history)) {
              site.history.forEach(log => {
                  if (log.date && log.note && log.note.trim() !== '') {
@@ -547,7 +539,7 @@
       let currentRow = [];
       let currentCell = '';
       let inQuotes = false;
-      // SAFE replace
+      
       const cleanText = String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
       for (let i = 0; i < cleanText.length; i++) {
@@ -597,29 +589,31 @@
            return parseInt(String(v).replace(/[^0-9.-]/g, '')) || 0;
         };
 
-        const siteName = getVal(['site name', 'site', 'location id', 'location', 'restaurant']) || values[0];
-        const brand = String(getVal(['customer brand', 'brand', 'customer']) || 'Unknown');
+        const siteName = getVal(['site name', 'location id', 'customer']) || values[0];
         const status = getVal(['status']);
         
-        // We only skip if the row is entirely blank/invalid
         if (!siteName || typeof siteName !== 'string' || siteName.trim() === '') return null;
+        if (!status && !getVal(['address']) && !getVal(['health'])) return null;
         if (String(siteName).toLowerCase().includes('total')) return null;
 
-        // Generate a stable ID from the site name so React doesn't "flicker" components if rows shift
         const stableId = String(siteName).trim().toLowerCase().replace(/[^a-z0-9]/g, '-');
+        const brand = String(getVal(['customer brand', 'brand', 'customer']) || 'Unknown');
 
-        // Default everything to Flippy-3 since F-2 is retired
-        let modelRaw = String(getVal(['product model', 'model', 'version']) || 'Flippy-3');
-        if (!modelRaw || modelRaw === 'Unknown') modelRaw = 'Flippy-3';
+        let modelRaw = String(getVal(['product model', 'model']) || 'Unknown');
+        if (modelRaw.toLowerCase().includes('flippy 3') || modelRaw.toLowerCase().includes('flippy-3')) modelRaw = 'Flippy-3';
 
-        let health = getNum(['health', 'f3 uptime', 'uptime']);
+        let health = getNum(['health']);
+        const uptime = getNum(['f3 uptime', 'uptime']);
         
+        if (modelRaw === 'Flippy-3' && uptime > 0) {
+            health = uptime; 
+        }
+
         const rawHistory = getVal(['history', 'incident history', 'log']);
         let parsedHistory = [];
         if (rawHistory && typeof rawHistory === 'string') {
             parsedHistory = rawHistory.split('|').map(entry => {
                 const trimmed = entry.trim();
-                // Regex to find YYYY-MM-DD at the start
                 const dateMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})[:\s-]*(.*)/);
                 if (dateMatch) {
                     return { 
@@ -638,7 +632,7 @@
         if (rawLng > 0) rawLng = -rawLng;
 
         return {
-          id: stableId + '-' + index, // More robust key
+          id: stableId + '-' + index, 
           site: String(siteName).trim(),
           brand: brand,
           model: modelRaw,
@@ -671,21 +665,7 @@
       const [historyFilterMonth, setHistoryFilterMonth] = useState('All');
       const [selectedBrand, setSelectedBrand] = useState('All');
       
-      // HARDCODED LINK
       const HARDCODED_SHEET_URL = 'PASTE_YOUR_GOOGLE_SHEET_LINK_HERE';
-
-      // --- Load Fonts & Safeguard Tailwind ---
-      useEffect(() => {
-        const link = document.createElement('link');
-        link.href = 'https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@300;400;500;700&display=swap';
-        link.rel = 'stylesheet';
-        document.head.appendChild(link);
-
-        // Safeguard for certain Sandbox environments throwing "tailwind is not defined"
-        if (typeof window !== 'undefined' && !window.tailwind) {
-            window.tailwind = { config: {} };
-        }
-      }, []);
 
       const [sheetUrl, setSheetUrl] = useState(() => {
         let url = HARDCODED_SHEET_URL.trim().replace(/^['"]|['"]$/g, ''); 
@@ -700,14 +680,6 @@
       const [searchTerm, setSearchTerm] = useState('');
       const [lastUpdated, setLastUpdated] = useState(null);
 
-      // Auto-route to settings if no sheet URL is set yet
-      useEffect(() => {
-        if (!sheetUrl) {
-          setActiveTab('settings');
-        }
-      }, [sheetUrl]);
-
-      // Landscape prompt state
       const [showRotatePrompt, setShowRotatePrompt] = useState(false);
 
       useEffect(() => {
@@ -723,10 +695,8 @@
         return () => window.removeEventListener('resize', checkOrientation);
       }, []);
 
-      const fetchSheetData = useCallback(async (url) => {
-        if (!url || url.includes('PASTE_YOUR')) {
-            return;
-        }
+      const fetchSheetData = useCallback(async (urlToFetch) => {
+        if (!urlToFetch || urlToFetch.includes('PASTE_YOUR')) return;
 
         setSyncError(false);
         
@@ -739,13 +709,12 @@
             setFleetData(parsedData);
             setLastUpdated(new Date());
             setError(null);
-            localStorage.setItem('flippy_fleet_sheet_url', url);
+            localStorage.setItem('flippy_fleet_sheet_url', urlToFetch);
         };
 
         try {
-          // 1st Attempt: Direct fetch bypassing the proxy to avoid Rate Limiting
-          const sep = url.includes('?') ? '&' : '?';
-          const directUrl = `${url}${sep}t=${Date.now()}`;
+          const sep = urlToFetch.includes('?') ? '&' : '?';
+          const directUrl = `${urlToFetch}${sep}t=${Date.now()}`;
           const response = await fetch(directUrl);
           
           if (!response.ok) throw new Error('Direct fetch failed');
@@ -754,9 +723,8 @@
 
         } catch (err) {
           console.warn("Direct fetch failed, falling back to proxy...", err);
-          // 2nd Attempt: Fallback to proxy
           try {
-              const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+              const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(urlToFetch)}`;
               const response = await fetch(proxyUrl);
               if (!response.ok) throw new Error(`Proxy fetch failed`);
               const text = await response.text();
@@ -764,11 +732,8 @@
           } catch (finalErr) {
               console.error("Connection failed", finalErr);
               setSyncError(true); 
-              
               setFleetData(prev => {
-                  if (prev.length === 0) {
-                      setError("Connection failed. Check link and network connection.");
-                  }
+                  if (prev.length === 0) setError("Connection failed. Check link and network connection.");
                   return prev;
               });
           }
@@ -801,7 +766,7 @@
         );
       }, [fleetData, searchTerm]);
 
-      // We assume the entire active sheet is the Flippy-3 Fleet
+      // All remaining active units are considered the Flippy-3 Fleet
       const flippy3 = filteredData;
 
       const availableBrands = useMemo(() => {
@@ -816,7 +781,7 @@
 
       const historyMonthOptions = useMemo(() => {
         const options = ['All'];
-        const start = new Date(2025, 9, 1); // Oct 2025
+        const start = new Date(2025, 9, 1);
         const now = new Date();
         const end = now > new Date(2026, 1, 1) ? now : new Date(2026, 1, 1);
         
@@ -838,7 +803,7 @@
           );
       }
 
-      if (loading && fleetData.length === 0 && activeTab !== 'settings') {
+      if (loading && fleetData.length === 0) {
           return (
               <div className="flex h-screen items-center justify-center bg-[#A7A1AF] flex-col gap-4">
                   <RefreshCw className="w-10 h-10 text-[#5d3181] animate-spin" />
@@ -850,7 +815,6 @@
       return (
         <div className="flex h-screen bg-[#A7A1AF] text-slate-900 font-sans overflow-hidden font-['Roboto'] relative">
           
-          {/* LANDSCAPE PROMPT OVERLAY */}
           {showRotatePrompt && (
             <div className="fixed inset-0 z-[60] bg-slate-950/95 flex flex-col items-center justify-center p-8 text-center text-white">
                <RotateCw className="w-16 h-16 text-[#5d3181] mb-6 animate-pulse" />
@@ -860,7 +824,6 @@
             </div>
           )}
 
-          {/* DESKTOP SIDEBAR */}
           <aside className="w-20 bg-black hidden md:flex flex-col items-center py-6 gap-6 z-20 shadow-xl border-r border-slate-800">
             <div className="p-3 bg-[#5d3181] rounded-xl shadow-lg shadow-purple-900/40 mb-4"><Activity className="text-white w-6 h-6" /></div>
             <nav className="flex flex-col gap-4 w-full px-2">
@@ -869,7 +832,6 @@
               <NavButton icon={<Cpu />} active={activeTab === 'disabilities'} onClick={() => setActiveTab('disabilities')} label="Disabilities" />
               <NavButton icon={<Calendar />} active={activeTab === 'events'} onClick={() => setActiveTab('events')} label="Upcoming Events" />
               <NavButton icon={<MapIcon />} active={activeTab === 'map'} onClick={() => setActiveTab('map')} label="Map" />
-              <NavButton icon={<Settings />} active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} label="Config" />
             </nav>
           </aside>
 
@@ -904,7 +866,6 @@
                 </div>
             </div>
 
-            {/* MOBILE TOP NAV */}
             <nav className="md:hidden bg-slate-900 border-b border-slate-800 flex justify-between items-center px-2 py-1 z-20 shrink-0 overflow-x-auto no-scrollbar">
                 <MobileTab icon={<LayoutGrid />} active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} label="Grid" />
                 <MobileTab icon={<AlertTriangle />} active={activeTab === 'incidents'} onClick={() => setActiveTab('incidents')} label="Incidents" />
@@ -1067,17 +1028,6 @@
                           <FleetMap data={fleetData} onSelectSite={(s) => { setSelectedSite(s); setHistoryFilterMonth('All'); }} />
                       </div>
                    </div>
-                )}
-
-                {activeTab === 'settings' && (
-                    <div className="max-w-xl mx-auto p-8 bg-slate-900 rounded-2xl border border-slate-800">
-                        <h2 className="text-xl font-bold mb-4 text-white">Settings</h2>
-                        <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Data Source (Google Sheet CSV Link)</label>
-                        <div className="flex gap-2">
-                            <input type="text" value={sheetUrl} onChange={e => setSheetUrl(e.target.value)} className="flex-1 p-2 bg-slate-800 border border-slate-700 rounded text-sm text-white" />
-                            <button onClick={() => fetchSheetData(sheetUrl)} className="bg-[#5d3181] text-white px-4 py-2 rounded text-sm font-bold hover:bg-[#754c9f]">Save</button>
-                        </div>
-                    </div>
                 )}
                 
                 <footer className="text-center py-8 text-slate-600 text-xs border-t border-slate-800">
