@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Flippy Fleet CRM</title>
+
+  <!-- React & ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+  <!-- Babel for JSX compilation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Lucide Icons (UMD Build) -->
+  <script src="https://unpkg.com/lucide-react@latest/dist/umd/lucide-react.js"></script>
+
+  <style>
+    body {
+      background-color: #A7A1AF;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(30, 41, 59, 0.5);
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(71, 85, 105, 0.8);
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: rgba(100, 116, 139, 1);
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.2s ease-out forwards;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    // --- EXTRACT REACT HOOKS ---
+    const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+    // --- EXTRACT LUCIDE ICONS ---
+    const { 
+      Activity, MapPin, AlertTriangle, CheckCircle2, Search, Settings, 
+      RefreshCw, Server, Phone, Clock, Battery, LayoutGrid, Map: MapIcon, 
+      ShieldAlert, FileSpreadsheet, Save, Cpu, Zap, EyeOff, ClipboardList, 
+      Info, History, CalendarClock, PieChart, ArrowLeft, List, WifiOff, 
+      Calendar, ShoppingBasket, X, Bot, Filter, ChevronLeft, ChevronRight, RotateCw 
+    } = window.lucideReact;
+
+    // --- HELPER FUNCTIONS ---
+
+    const parseUpcomingDate = (text) => {
+       if (!text || typeof text !== 'string') return { hasDate: false, cleanText: String(text || '') };
+       const match = text.match(/(\d{4})-(\d{2})-(\d{2})/);
+       if (match) {
+          const year = parseInt(match[1], 10);
+          const monthIndex = parseInt(match[2], 10) - 1;
+          const day = parseInt(match[3], 10);
+          const date = new Date(year, monthIndex, day);
+          
+          const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+          const dayStr = "Event"; // Generic fallback
+          const cleanText = text.replace(match[0], '').trim();
+          
+          return { 
+              hasDate: true, 
+              month: months[date.getMonth()] || "JAN", 
+              day: day, 
+              dayStr: dayStr,
+              fullDateStr: `${dayStr} ${monthIndex + 1}/${day}`,
+              cleanText: cleanText 
+          };
+       }
+       return { hasDate: false, cleanText: text };
+    };
+
+    const getDisabilityLimits = (modelName) => {
+        return { slot: 12, input: 3, sensor: 8 };
+    };
+
+    const getBrandColor = (brand) => {
+        if (!brand || brand === 'All') return 'text-slate-300';
+        const b = brand.toLowerCase();
+        if (b.includes('white castle')) return 'text-blue-400';
+        if (b.includes('levy')) return 'text-red-400';
+        if (b.includes('insert coin')) return 'text-purple-400';
+        return 'text-emerald-400'; // Fallback for other potential brands
+    };
+
+    // --- LEAFLET MAP COMPONENT ---
+    const FleetMap = ({ data, onSelectSite }) => {
+      const mapRef = useRef(null);
+      const mapInstance = useRef(null);
+
+      useEffect(() => {
+        if (!document.getElementById('leaflet-css')) {
+          const link = document.createElement('link');
+          link.id = 'leaflet-css';
+          link.rel = 'stylesheet';
+          link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+          document.head.appendChild(link);
+        }
+        if (!document.getElementById('leaflet-js')) {
+          const script = document.createElement('script');
+          script.id = 'leaflet-js';
+          script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+          script.async = true;
+          script.onload = initMap;
+          document.body.appendChild(script);
+        } else {
+          if (window.L) initMap();
+          else document.getElementById('leaflet-js').onload = initMap;
+        }
+        return () => {
+          if (mapInstance.current) {
+            mapInstance.current.remove();
+            mapInstance.current = null;
+          }
+        };
+      }, []);
+
+      const initMap = () => {
+        if (mapInstance.current || !mapRef.current || !window.L) return;
+        const bounds = [[10, -170], [72, -50]];
+        const map = window.L.map(mapRef.current, {
+          maxBounds: bounds,       
+          maxBoundsViscosity: 1.0, 
+          minZoom: 3               
+        }).setView([39.8283, -98.5795], 4); 
+        mapInstance.current = map;
+        
+        const tileLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap',
+          noWrap: true, bounds: bounds
+        });
+        tileLayer.addTo(map);
+
+        if(mapRef.current) {
+            const style = document.createElement('style');
+            style.innerHTML = `
+              .leaflet-tile-pane { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
+              .leaflet-container { background: #0f172a; }
+            `;
+            mapRef.current.appendChild(style);
+        }
+        updateMarkers(map);
+      };
+
+      useEffect(() => {
+        if (mapInstance.current && window.L) updateMarkers(mapInstance.current);
+      }, [data]);
+
+      const updateMarkers = (map) => {
+        map.eachLayer((layer) => {
+          if (layer instanceof window.L.Marker) map.removeLayer(layer);
+        });
+        const bounds = [];
+        data.forEach(site => {
+          if (site.lat && site.lng) {
+            let color = '#64748b'; // default offline/gray
+            const s = String(site.status || '').toLowerCase();
+            
+            if (s.includes('operating') || s.includes('online')) color = '#10b981'; // emerald-500
+            else if (s.includes('robot down')) color = '#ef4444'; // red-500
+            else if (s.includes('cleaning')) color = '#3b82f6'; // blue-500
+            else if (s.includes('service') || s.includes('progress')) color = '#a855f7'; // purple-500
+            else if (s.includes('manual') || s.includes('voluntarily')) color = '#eab308'; // yellow-500
+
+            const icon = window.L.divIcon({
+              className: 'custom-marker',
+              html: `<div style="background-color: ${color}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 8px ${color};"></div>`,
+              iconSize: [12, 12],
+              iconAnchor: [6, 6]
+            });
+            const marker = window.L.marker([site.lat, site.lng], { icon })
+              .addTo(map)
+              .bindPopup(`<b>${site.site}</b><br>${site.status}`);
+            marker.on('click', () => onSelectSite(site));
+            bounds.push([site.lat, site.lng]);
+          }
+        });
+        if (bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 12 });
+      };
+
+      return <div ref={mapRef} className="w-full h-full z-0 bg-slate-900 rounded-xl min-h-[600px]" />;
+    };
+
+    // --- SUB COMPONENTS ---
+
+    const NavButton = ({ icon, active, onClick, label }) => {
+      return (
+        <button onClick={onClick} className={`w-full p-3 rounded-xl flex flex-col items-center gap-1 transition-all ${active ? 'bg-[#5d3181] text-white shadow-inner' : 'text-slate-500 hover:bg-slate-800 hover:text-white'}`}>
+          {React.cloneElement(icon, { size: 20 })}
+          <span className="text-[10px] font-medium text-center leading-tight hidden md:block">{label}</span>
+        </button>
+      );
+    };
+
+    const MobileTab = ({ icon, active, onClick, label }) => {
+      return (
+        <button 
+          onClick={onClick} 
+          className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all flex-1 ${active ? 'text-[#5d3181] bg-slate-800' : 'text-slate-400 hover:bg-slate-800'}`}
+        >
+          {React.cloneElement(icon, { size: 18 })}
+          <span className="text-[10px] font-medium mt-1">{label}</span>
+        </button>
+      );
+    };
+
+    const StatusBadge = ({ status }) => {
+      const s = String(status || 'Offline').toLowerCase();
+      
+      let activeStyle = "bg-slate-800 text-slate-400 border-slate-700";
+      let Icon = <ShieldAlert className="w-3 h-3 mr-1" />;
+
+      if (s.includes('operating') || s.includes('online')) {
+          activeStyle = "bg-emerald-900/30 text-emerald-400 border-emerald-800/50";
+          Icon = <CheckCircle2 className="w-3 h-3 mr-1" />;
+      } else if (s.includes('robot down')) {
+          activeStyle = "bg-red-900/30 text-red-400 border-red-800/50";
+          Icon = <AlertTriangle className="w-3 h-3 mr-1" />;
+      } else if (s.includes('cleaning')) {
+          activeStyle = "bg-blue-900/30 text-blue-400 border-blue-800/50";
+          Icon = <RefreshCw className="w-3 h-3 mr-1" />; 
+      } else if (s.includes('service') || s.includes('progress')) {
+          activeStyle = "bg-purple-900/30 text-[#a855f7] border-purple-800/50";
+          Icon = <Settings className="w-3 h-3 mr-1" />;
+      } else if (s.includes('manual') || s.includes('voluntarily')) {
+          activeStyle = "bg-yellow-900/30 text-yellow-400 border-yellow-800/50";
+          Icon = <Activity className="w-3 h-3 mr-1" />;
+      }
+
+      return (
+        <span className={`flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border font-['Roboto'] ${activeStyle}`}>
+          {Icon} {status || 'Unknown'}
+        </span>
+      );
+    };
+
+    const FleetStatusBar = ({ fleet }) => {
+        if (!fleet || fleet.length === 0) return null;
+
+        const categorizedSites = {
+            operating: [],
+            robotDown: [],
+            service: [],
+            cleaning: [],
+            manual: [],
+            offline: []
+        };
+
+        fleet.forEach(site => {
+            const s = String(site.status).toLowerCase();
+            if (s.includes('operating') || s.includes('online')) categorizedSites.operating.push(site.site);
+            else if (s.includes('robot down')) categorizedSites.robotDown.push(site.site);
+            else if (s.includes('cleaning')) categorizedSites.cleaning.push(site.site);
+            else if (s.includes('service') || s.includes('progress')) categorizedSites.service.push(site.site);
+            else if (s.includes('manual') || s.includes('voluntarily') || s.includes('voluntary')) categorizedSites.manual.push(site.site);
+            else categorizedSites.offline.push(site.site); 
+        });
+
+        const total = fleet.length;
+
+        const StatItem = ({ label, sites, colorClass, dotClass, hideTooltip }) => {
+            const count = sites.length;
+            const displaySites = sites.slice(0, 10);
+            const extra = count - 10;
+            
+            return (
+                <div className="flex flex-col items-center justify-center p-3 bg-slate-800/50 rounded-xl border border-slate-700/50 relative group">
+                    <div className={`text-2xl font-bold ${colorClass} mb-1 flex items-center gap-2 ${!hideTooltip && count > 0 ? 'cursor-help' : 'cursor-default'}`}>
+                        <span className={`w-2.5 h-2.5 rounded-full ${dotClass} shadow-[0_0_8px_currentColor]`}></span>
+                        {count}
+                    </div>
+                    <div className="text-[10px] text-slate-400 uppercase font-bold text-center leading-tight h-6 flex items-center">{label}</div>
+                    
+                    {/* Tooltip for Non-Operating Categories */}
+                    {!hideTooltip && count > 0 && (
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] p-3 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded shadow-xl z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="font-bold text-[#a855f7] border-b border-slate-800 pb-1 mb-1">{label} Sites:</div>
+                            <ul className="text-left list-none space-y-0.5">
+                                {displaySites.map((site, i) => <li key={i} className="truncate text-[10px]">{site}</li>)}
+                                {extra > 0 && <li className="text-[10px] text-slate-500 italic mt-1">+{extra} more site{extra > 1 ? 's' : ''}</li>}
+                            </ul>
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-700"></div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        return (
+            <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-lg mb-8">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-4 gap-2">
+                    <h3 className="font-bold text-white font-['Bebas_Neue'] tracking-wide text-xl flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-[#a855f7]" /> Real-Time Fleet Status
+                    </h3>
+                    <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">{total} Total Active Units</div>
+                </div>
+
+                {/* Stacked Bar */}
+                <div className="w-full h-3 flex rounded-full overflow-hidden mb-6 bg-slate-800">
+                    {categorizedSites.operating.length > 0 && <div style={{width: `${(categorizedSites.operating.length/total)*100}%`}} className="bg-emerald-500 transition-all duration-1000" title={`Operating: ${categorizedSites.operating.length}`} />}
+                    {categorizedSites.service.length > 0 && <div style={{width: `${(categorizedSites.service.length/total)*100}%`}} className="bg-[#a855f7] transition-all duration-1000" title={`Service: ${categorizedSites.service.length}`} />}
+                    {categorizedSites.cleaning.length > 0 && <div style={{width: `${(categorizedSites.cleaning.length/total)*100}%`}} className="bg-blue-500 transition-all duration-1000" title={`Cleaning: ${categorizedSites.cleaning.length}`} />}
+                    {categorizedSites.manual.length > 0 && <div style={{width: `${(categorizedSites.manual.length/total)*100}%`}} className="bg-yellow-500 transition-all duration-1000" title={`Manual: ${categorizedSites.manual.length}`} />}
+                    {categorizedSites.robotDown.length > 0 && <div style={{width: `${(categorizedSites.robotDown.length/total)*100}%`}} className="bg-red-500 transition-all duration-1000" title={`Robot Down: ${categorizedSites.robotDown.length}`} />}
+                    {categorizedSites.offline.length > 0 && <div style={{width: `${(categorizedSites.offline.length/total)*100}%`}} className="bg-slate-500 transition-all duration-1000" title={`Offline: ${categorizedSites.offline.length}`} />}
+                </div>
+
+                {/* Grid Legend */}
+                <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
+                    <StatItem label="Operating" sites={categorizedSites.operating} colorClass="text-emerald-400" dotClass="bg-emerald-500 text-emerald-500" hideTooltip={true} />
+                    <StatItem label="Service In Progress" sites={categorizedSites.service} colorClass="text-[#a855f7]" dotClass="bg-[#a855f7] text-[#a855f7]" />
+                    <StatItem label="Cleaning" sites={categorizedSites.cleaning} colorClass="text-blue-400" dotClass="bg-blue-500 text-blue-500" />
+                    <StatItem label="Voluntary Manual" sites={categorizedSites.manual} colorClass="text-yellow-400" dotClass="bg-yellow-500 text-yellow-500" />
+                    <StatItem label="Robot Down" sites={categorizedSites.robotDown} colorClass="text-red-400" dotClass="bg-red-500 text-red-500" />
+                    <StatItem label="Offline / Other" sites={categorizedSites.offline} colorClass="text-slate-400" dotClass="bg-slate-500 text-slate-500" />
+                </div>
+            </div>
+        );
+    };
+
+    const AvgCard = ({ title, fleet }) => {
+        if (fleet.length === 0) return null;
+
+        const avgHealth = Math.round(fleet.reduce((acc, curr) => acc + curr.health, 0) / fleet.length);
+        const online = fleet.filter(d => (d.status||'').toLowerCase().includes('online') || (d.status||'').toLowerCase().includes('operating')).length;
+        let ringColor = "text-emerald-500";
+        if (avgHealth < 80) ringColor = "text-yellow-500";
+        if (avgHealth < 50) ringColor = "text-red-500";
+      
+        return (
+          <div className="bg-slate-900 rounded-xl p-4 shadow-sm border border-slate-800 mb-4 flex items-center justify-between transition-all cursor-default">
+            <div>
+              <h3 className="text-slate-500 text-xs font-bold uppercase tracking-wider font-['Bebas_Neue'] tracking-widest text-base">{title} Averages</h3>
+              <div className="mt-1 flex items-center gap-2">
+                <span className="text-2xl font-bold text-white">{avgHealth}%</span>
+                <span className="text-xs text-slate-400 font-medium">Uptime Score</span>
+              </div>
+              <div className="text-xs text-slate-500 mt-1">{online} / {fleet.length} Units Online</div>
+            </div>
+            <div className="relative w-12 h-12">
+               <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                 <path className="text-slate-800" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="4" />
+                 <path className={`${ringColor} transition-all duration-1000`} strokeDasharray={`${avgHealth}, 100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="4" />
+               </svg>
+            </div>
+          </div>
+        );
+    };
+
+    const FleetGrid = ({ fleet, onSelect }) => {
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {fleet.map(site => {
+                return (
+              <div key={site.id} onClick={() => onSelect(site)} className="bg-slate-900 rounded-xl p-4 shadow-sm border border-slate-800 hover:border-[#5d3181] transition-all cursor-pointer group">
+                <div className="flex justify-between items-start mb-3">
+                  <h4 className="font-bold text-white truncate pr-2 group-hover:text-[#a855f7]">{site.site}</h4>
+                  <StatusBadge status={site.status} />
+                </div>
+                
+                <div className="mb-4">
+                  <div className="flex justify-between text-xs text-slate-400 mb-1">
+                    <span>Uptime</span>
+                    <span className="font-bold text-white">{site.health}%</span>
+                  </div>
+                  <div className="w-full bg-slate-800 rounded-full h-1.5">
+                    <div className={`h-1.5 rounded-full ${site.health > 79 ? 'bg-emerald-500' : site.health > 49 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{width: `${site.health}%`}}></div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+                  <div className="text-center">
+                    <div className="text-[10px] text-slate-500 uppercase">Unresolved Misgrabs</div>
+                    <div className="text-sm font-bold text-slate-300">{site.misgrabs}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-[10px] text-slate-500 uppercase">Unresolved Collisions</div>
+                    <div className="text-sm font-bold text-slate-300">{site.collisions}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-[10px] text-slate-500 uppercase">Orders Cooked</div>
+                    <div className="text-sm font-bold text-emerald-400">{site.orders || 0}</div>
+                  </div>
+                </div>
+
+              </div>
+                );
+            })}
+          </div>
+        );
+    };
+
+    // --- CALENDAR VIEW COMPONENT ---
+    const CalendarView = ({ fleetData }) => {
+      const [currentDate, setCurrentDate] = useState(new Date());
+
+      const events = useMemo(() => {
+        const all = [];
+        fleetData.forEach(site => {
+          // Process Upcoming Events
+          if (site.upcoming && site.upcoming.trim() !== '') {
+            site.upcoming.split('|').forEach(entry => {
+              const trimmed = entry.trim();
+              if (trimmed === '') return;
+              const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+              if (match) {
+                 const [_, y, m, d] = match;
+                 const dateKey = `${y}-${m}-${d}`; 
+                 all.push({
+                   id: site.id + 'up' + dateKey + Math.random(), 
+                   dateKey,
+                   site: site.site,
+                   desc: trimmed.substring(10).trim().replace(/^[,:-]\s*/, ''), 
+                   rawDate: new Date(parseInt(y), parseInt(m)-1, parseInt(d)),
+                   isHistory: false
+                 });
+              }
+            });
+          }
+          
+          // Process History Events
+          if (site.history && Array.isArray(site.history)) {
+             site.history.forEach(log => {
+                 if (log.date && log.note && log.note.trim() !== '') {
+                     const match = log.date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                     if (match) {
+                         const [_, y, m, d] = match;
+                         const dateKey = `${y}-${m}-${d}`;
+                         all.push({
+                             id: site.id + 'hist' + dateKey + Math.random(),
+                             dateKey,
+                             site: site.site,
+                             desc: log.note,
+                             rawDate: new Date(parseInt(y), parseInt(m)-1, parseInt(d)),
+                             isHistory: true
+                         });
+                     }
+                 }
+             });
+          }
+        });
+        return all;
+      }, [fleetData]);
+
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0 = Sun
+      const monthName = currentDate.toLocaleString('default', { month: 'long' });
+
+      const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
+      const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
+      const renderDays = () => {
+         const slots = [];
+         for (let i = 0; i < firstDayOfMonth; i++) {
+            slots.push(<div key={`empty-${i}`} className="bg-slate-900/50 border border-slate-800/50 h-32"></div>);
+         }
+         for (let d = 1; d <= daysInMonth; d++) {
+            const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            const isToday = dateKey === todayStr;
+            const dayEvents = events.filter(e => e.dateKey === dateKey);
+
+            slots.push(
+              <div key={d} className={`p-2 border border-slate-800 h-32 overflow-y-auto custom-scrollbar relative group ${isToday ? 'bg-slate-800 ring-1 ring-inset ring-[#5d3181]' : 'bg-slate-900'}`}>
+                 <div className={`text-xs font-bold mb-1 ${isToday ? 'text-[#a855f7]' : 'text-slate-500'}`}>{d}</div>
+                 <div className="space-y-1">
+                   {dayEvents.map(ev => (
+                     <div 
+                        key={ev.id} 
+                        className={`text-[10px] p-1 border rounded ${
+                            ev.isHistory 
+                            ? 'bg-slate-800 border-slate-700/50 text-slate-400' 
+                            : 'bg-[#5d3181]/20 border-[#5d3181]/30 text-slate-200'
+                        }`}
+                     >
+                        <span className={`font-bold ${ev.isHistory ? 'text-slate-500' : 'text-[#a855f7]'}`}>{ev.site}</span>: {ev.desc}
+                     </div>
+                   ))}
+                 </div>
+              </div>
+            );
+         }
+         return slots;
+      };
+
+      return (
+        <div className="max-w-6xl mx-auto bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden flex flex-col h-[700px]">
+           <div className="p-4 flex items-center justify-between border-b border-slate-800">
+              <h2 className="text-xl font-bold text-white font-['Bebas_Neue'] tracking-wide flex items-center gap-2">
+                 <Calendar className="w-5 h-5 text-[#a855f7]" /> {monthName} {year}
+              </h2>
+              <div className="flex gap-2 items-center">
+                 <button onClick={prevMonth} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white"><ChevronLeft className="w-5 h-5"/></button>
+                 <button onClick={() => setCurrentDate(new Date())} className="text-xs font-bold text-[#5d3181] hover:text-[#a855f7] px-2">Today</button>
+                 <button onClick={nextMonth} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white"><ChevronRight className="w-5 h-5"/></button>
+              </div>
+           </div>
+           <div className="grid grid-cols-7 bg-slate-950 border-b border-slate-800">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                 <div key={day} className="py-2 text-center text-xs font-bold text-slate-500 uppercase">{day}</div>
+              ))}
+           </div>
+           <div className="grid grid-cols-7 flex-1 overflow-y-auto">
+              {renderDays()}
+           </div>
+        </div>
+      );
+    }
+
+    // --- ADVANCED CSV PARSER ---
+    const parseCSV = (text) => {
+      if (!text || typeof text !== 'string') return [];
+      const rows = [];
+      let currentRow = [];
+      let currentCell = '';
+      let inQuotes = false;
+      // SAFE replace
+      const cleanText = String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+      for (let i = 0; i < cleanText.length; i++) {
+        const char = cleanText[i];
+        const nextChar = cleanText[i + 1];
+        if (char === '"') {
+          if (inQuotes && nextChar === '"') { currentCell += '"'; i++; }
+          else { inQuotes = !inQuotes; }
+        } else if (char === ',' && !inQuotes) {
+          currentRow.push(currentCell.trim()); currentCell = '';
+        } else if (char === '\n' && !inQuotes) {
+          currentRow.push(currentCell.trim());
+          if (currentRow.some(c => c !== '')) rows.push(currentRow);
+          currentRow = []; currentCell = '';
+        } else { currentCell += char; }
+      }
+      if (currentCell || currentRow.length) {
+        currentRow.push(currentCell.trim());
+        if (currentRow.some(c => c !== '')) rows.push(currentRow);
+      }
+
+      if (rows.length === 0) return [];
+
+      let headerIndex = -1;
+      let headers = [];
+      for (let i = 0; i < Math.min(rows.length, 10); i++) {
+        const potential = rows[i].map(h => String(h).toLowerCase().replace(/^"|"$/g, ''));
+        if (potential.some(h => h.includes('site') || h.includes('location'))) {
+          headerIndex = i;
+          headers = potential;
+          break;
+        }
+      }
+      if (headerIndex === -1) {
+        headerIndex = 0;
+        headers = rows[0].map(h => String(h).toLowerCase().replace(/^"|"$/g, ''));
+      }
+
+      return rows.slice(headerIndex + 1).map((values, index) => {
+        const getVal = (keys) => {
+          const idx = headers.findIndex(h => keys.some(k => h.includes(k)));
+          return idx !== -1 ? values[idx] : null;
+        };
+        const getNum = (keys) => {
+           const v = getVal(keys);
+           if (v === null || v === undefined) return 0;
+           return parseInt(String(v).replace(/[^0-9.-]/g, '')) || 0;
+        };
+
+        const siteName = getVal(['site name', 'site', 'location id', 'location', 'restaurant']) || values[0];
+        const brand = String(getVal(['customer brand', 'brand', 'customer']) || 'Unknown');
+        const status = getVal(['status']);
+        
+        // We only skip if the row is entirely blank/invalid
+        if (!siteName || typeof siteName !== 'string' || siteName.trim() === '') return null;
+        if (String(siteName).toLowerCase().includes('total')) return null;
+
+        // Generate a stable ID from the site name so React doesn't "flicker" components if rows shift
+        const stableId = String(siteName).trim().toLowerCase().replace(/[^a-z0-9]/g, '-');
+
+        // Default everything to Flippy-3 since F-2 is retired
+        let modelRaw = String(getVal(['product model', 'model', 'version']) || 'Flippy-3');
+        if (!modelRaw || modelRaw === 'Unknown') modelRaw = 'Flippy-3';
+
+        let health = getNum(['health', 'f3 uptime', 'uptime']);
+        
+        const rawHistory = getVal(['history', 'incident history', 'log']);
+        let parsedHistory = [];
+        if (rawHistory && typeof rawHistory === 'string') {
+            parsedHistory = rawHistory.split('|').map(entry => {
+                const trimmed = entry.trim();
+                // Regex to find YYYY-MM-DD at the start
+                const dateMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})[:\s-]*(.*)/);
+                if (dateMatch) {
+                    return { 
+                        date: dateMatch[1], 
+                        note: dateMatch[2].trim() 
+                    };
+                }
+                return { date: '', note: trimmed };
+            });
+        }
+
+        let rawLat = parseFloat(getVal(['lat']));
+        let rawLng = parseFloat(getVal(['lng']));
+        if (isNaN(rawLat)) rawLat = 37.0902;
+        if (isNaN(rawLng)) rawLng = -95.7129;
+        if (rawLng > 0) rawLng = -rawLng;
+
+        return {
+          id: stableId + '-' + index, // More robust key
+          site: String(siteName).trim(),
+          brand: brand,
+          model: modelRaw,
+          status: String(status || 'Offline'),
+          health: health,
+          slotRate: getNum(['slot disability', 'slot rate']),
+          inputRate: getNum(['input disability', 'input rate']), 
+          sensorCount: getNum(['sensor disability', 'sensor count']),
+          incidents: String(getVal(['active incident', 'notes', 'incident']) || 'None'),
+          upcoming: String(getVal(['upcoming', 'events', 'schedule']) || ''),
+          history: parsedHistory,
+          address: String(getVal(['address']) || 'No Address'),
+          maxBaskets: getNum(['max baskets', 'baskets cooked']),
+          orders: getNum(['orders cooked', 'f3 orders']), 
+          sentiment: getNum(['sentiment score']),
+          misgrabs: getNum(['misgrabs']),
+          collisions: getNum(['collisions', 'f3 collisions']),
+          visionFails: getNum(['vision fails', 'f2 vision fails']),
+          lat: rawLat, 
+          lng: rawLng,
+        };
+      }).filter(item => item !== null);
+    };
+
+    // --- MAIN APP ---
+
+    function App() {
+      const [activeTab, setActiveTab] = useState('dashboard');
+      const [selectedSite, setSelectedSite] = useState(null);
+      const [historyFilterMonth, setHistoryFilterMonth] = useState('All');
+      const [selectedBrand, setSelectedBrand] = useState('All');
+      
+      // HARDCODED LINK
+      const HARDCODED_SHEET_URL = 'PASTE_YOUR_GOOGLE_SHEET_LINK_HERE';
+
+      // --- Load Fonts & Safeguard Tailwind ---
+      useEffect(() => {
+        const link = document.createElement('link');
+        link.href = 'https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@300;400;500;700&display=swap';
+        link.rel = 'stylesheet';
+        document.head.appendChild(link);
+
+        // Safeguard for certain Sandbox environments throwing "tailwind is not defined"
+        if (typeof window !== 'undefined' && !window.tailwind) {
+            window.tailwind = { config: {} };
+        }
+      }, []);
+
+      const [sheetUrl, setSheetUrl] = useState(() => {
+        let url = HARDCODED_SHEET_URL.trim().replace(/^['"]|['"]$/g, ''); 
+        if (url && !url.includes('PASTE_YOUR')) return url;
+        return localStorage.getItem('flippy_fleet_sheet_url') || '';
+      });
+
+      const [fleetData, setFleetData] = useState([]);
+      const [loading, setLoading] = useState(false);
+      const [error, setError] = useState(null);
+      const [syncError, setSyncError] = useState(false);
+      const [searchTerm, setSearchTerm] = useState('');
+      const [lastUpdated, setLastUpdated] = useState(null);
+
+      // Auto-route to settings if no sheet URL is set yet
+      useEffect(() => {
+        if (!sheetUrl) {
+          setActiveTab('settings');
+        }
+      }, [sheetUrl]);
+
+      // Landscape prompt state
+      const [showRotatePrompt, setShowRotatePrompt] = useState(false);
+
+      useEffect(() => {
+        const checkOrientation = () => {
+           if (window.innerWidth < window.innerHeight && window.innerWidth < 768) {
+               setShowRotatePrompt(true);
+           } else {
+               setShowRotatePrompt(false);
+           }
+        };
+        window.addEventListener('resize', checkOrientation);
+        checkOrientation();
+        return () => window.removeEventListener('resize', checkOrientation);
+      }, []);
+
+      const fetchSheetData = useCallback(async (url) => {
+        if (!url || url.includes('PASTE_YOUR')) {
+            return;
+        }
+
+        setSyncError(false);
+        
+        const processCSV = (text) => {
+            if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+                throw new Error('Invalid Link: URL returned HTML instead of CSV.');
+            }
+            const parsedData = parseCSV(text);
+            if (parsedData.length === 0) throw new Error('Connected, but found 0 valid rows.');
+            setFleetData(parsedData);
+            setLastUpdated(new Date());
+            setError(null);
+            localStorage.setItem('flippy_fleet_sheet_url', url);
+        };
+
+        try {
+          // 1st Attempt: Direct fetch bypassing the proxy to avoid Rate Limiting
+          const sep = url.includes('?') ? '&' : '?';
+          const directUrl = `${url}${sep}t=${Date.now()}`;
+          const response = await fetch(directUrl);
+          
+          if (!response.ok) throw new Error('Direct fetch failed');
+          const text = await response.text();
+          processCSV(text);
+
+        } catch (err) {
+          console.warn("Direct fetch failed, falling back to proxy...", err);
+          // 2nd Attempt: Fallback to proxy
+          try {
+              const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+              const response = await fetch(proxyUrl);
+              if (!response.ok) throw new Error(`Proxy fetch failed`);
+              const text = await response.text();
+              processCSV(text);
+          } catch (finalErr) {
+              console.error("Connection failed", finalErr);
+              setSyncError(true); 
+              
+              setFleetData(prev => {
+                  if (prev.length === 0) {
+                      setError("Connection failed. Check link and network connection.");
+                  }
+                  return prev;
+              });
+          }
+        }
+      }, []);
+
+      useEffect(() => {
+        let isMounted = true;
+        if (sheetUrl && !sheetUrl.includes('PASTE_YOUR')) {
+          setLoading(true);
+          fetchSheetData(sheetUrl).finally(() => {
+              if (isMounted) setLoading(false);
+          });
+
+          const intervalId = setInterval(() => {
+              fetchSheetData(sheetUrl);
+          }, 60000);
+
+          return () => {
+              isMounted = false;
+              clearInterval(intervalId);
+          };
+        }
+      }, [sheetUrl, fetchSheetData]);
+
+      const filteredData = useMemo(() => {
+        return fleetData.filter(site => 
+          site.site.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (site.model || '').toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }, [fleetData, searchTerm]);
+
+      // We assume the entire active sheet is the Flippy-3 Fleet
+      const flippy3 = filteredData;
+
+      const availableBrands = useMemo(() => {
+        const brands = new Set(flippy3.map(site => site.brand).filter(b => b !== 'Unknown' && b !== ''));
+        return ['All', ...Array.from(brands).sort()];
+      }, [flippy3]);
+
+      const displayFlippy3 = useMemo(() => {
+        if (selectedBrand === 'All') return flippy3;
+        return flippy3.filter(site => site.brand === selectedBrand);
+      }, [flippy3, selectedBrand]);
+
+      const historyMonthOptions = useMemo(() => {
+        const options = ['All'];
+        const start = new Date(2025, 9, 1); // Oct 2025
+        const now = new Date();
+        const end = now > new Date(2026, 1, 1) ? now : new Date(2026, 1, 1);
+        
+        let curr = new Date(start);
+        while (curr <= end) {
+            options.push(curr.toLocaleString('default', { month: 'long', year: 'numeric' }));
+            curr.setMonth(curr.getMonth() + 1);
+        }
+        return options.reverse(); 
+      }, []);
+
+      if (error) {
+          return (
+              <div className="flex h-screen items-center justify-center bg-[#A7A1AF] flex-col gap-6 p-8 text-center font-['Roboto']">
+                  <WifiOff className="w-12 h-12 text-red-600" />
+                  <div><h2 className="text-xl font-bold text-slate-800 font-['Bebas_Neue'] tracking-wide text-3xl">Connection Failed</h2><p className="text-slate-600">{error}</p></div>
+                  <button onClick={() => {setError(null); fetchSheetData(sheetUrl);}} className="px-6 py-2 bg-[#5d3181] text-white rounded-lg">Retry</button>
+              </div>
+          );
+      }
+
+      if (loading && fleetData.length === 0 && activeTab !== 'settings') {
+          return (
+              <div className="flex h-screen items-center justify-center bg-[#A7A1AF] flex-col gap-4">
+                  <RefreshCw className="w-10 h-10 text-[#5d3181] animate-spin" />
+                  <p className="text-slate-600 font-medium">Connecting to Fleet...</p>
+              </div>
+          );
+      }
+
+      return (
+        <div className="flex h-screen bg-[#A7A1AF] text-slate-900 font-sans overflow-hidden font-['Roboto'] relative">
+          
+          {/* LANDSCAPE PROMPT OVERLAY */}
+          {showRotatePrompt && (
+            <div className="fixed inset-0 z-[60] bg-slate-950/95 flex flex-col items-center justify-center p-8 text-center text-white">
+               <RotateCw className="w-16 h-16 text-[#5d3181] mb-6 animate-pulse" />
+               <h2 className="text-3xl font-['Bebas_Neue'] mb-4 tracking-wide">Please Rotate Your Device</h2>
+               <p className="text-slate-400 mb-8 max-w-xs leading-relaxed">This dashboard is optimized for landscape mode. Please turn your phone sideways for the best experience.</p>
+               <button onClick={() => setShowRotatePrompt(false)} className="px-8 py-3 bg-slate-800 rounded-full text-sm font-bold hover:bg-slate-700 transition-colors">Continue in Portrait</button>
+            </div>
+          )}
+
+          {/* DESKTOP SIDEBAR */}
+          <aside className="w-20 bg-black hidden md:flex flex-col items-center py-6 gap-6 z-20 shadow-xl border-r border-slate-800">
+            <div className="p-3 bg-[#5d3181] rounded-xl shadow-lg shadow-purple-900/40 mb-4"><Activity className="text-white w-6 h-6" /></div>
+            <nav className="flex flex-col gap-4 w-full px-2">
+              <NavButton icon={<LayoutGrid />} active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} label="Grid" />
+              <NavButton icon={<AlertTriangle />} active={activeTab === 'incidents'} onClick={() => setActiveTab('incidents')} label="Active Incidents" />
+              <NavButton icon={<Cpu />} active={activeTab === 'disabilities'} onClick={() => setActiveTab('disabilities')} label="Disabilities" />
+              <NavButton icon={<Calendar />} active={activeTab === 'events'} onClick={() => setActiveTab('events')} label="Upcoming Events" />
+              <NavButton icon={<MapIcon />} active={activeTab === 'map'} onClick={() => setActiveTab('map')} label="Map" />
+              <NavButton icon={<Settings />} active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} label="Config" />
+            </nav>
+          </aside>
+
+          <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+            <header className="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 md:px-8 shadow-sm z-10 shrink-0">
+                <div className="flex items-center gap-4">
+                    <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-white tracking-wide font-['Bebas_Neue'] truncate">Flippy Fleet Status</h1>
+                    <div className="flex items-center gap-2 shrink-0">
+                        {syncError ? (
+                            <span className="px-2 py-0.5 bg-red-900/30 text-red-400 rounded-full text-[10px] md:text-xs font-bold border border-red-800/50" title="Retrying connection in background...">DISCONNECTED</span>
+                        ) : (
+                            <span className="px-2 py-0.5 bg-green-900/30 text-green-400 rounded-full text-[10px] md:text-xs font-bold animate-pulse border border-green-800/50">LIVE</span>
+                        )}
+                        {lastUpdated && <span className="text-xs text-slate-500 hidden md:inline">Updated: {lastUpdated.toLocaleTimeString()}</span>}
+                    </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                    <div className="relative hidden md:block">
+                        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <input type="text" placeholder="Search..." className="pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-[#5d3181] focus:bg-slate-800 outline-none text-white font-['Roboto'] w-48 lg:w-64" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    </div>
+                    <button onClick={() => fetchSheetData(sheetUrl)} className={`p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-[#5d3181] ${loading ? 'animate-spin' : ''}`}><RefreshCw className="w-5 h-5" /></button>
+                </div>
+            </header>
+
+            <div className="bg-[#754C9F] text-white px-4 md:px-6 py-2 flex justify-between items-center shadow-inner text-xs md:text-sm relative overflow-hidden shrink-0">
+                 <div className="absolute inset-0 bg-gradient-to-r from-purple-900/20 to-transparent pointer-events-none"></div>
+                <div className="flex items-center gap-2 relative z-10"><Phone className="w-3 h-3 md:w-4 md:h-4" /><span className="font-medium">Support: 24/7/365</span></div>
+                <div className="flex items-center gap-3 relative z-10">
+                    <a href="mailto:support@misorobotics.com" className="hidden md:flex items-center gap-2 font-bold opacity-90 hover:opacity-100 transition-opacity font-['Bebas_Neue'] tracking-wide text-lg"><List className="w-4 h-4" /> support@misorobotics.com</a>
+                    <a href="tel:2029156514" className="font-bold opacity-90 hover:opacity-100 transition-opacity font-['Bebas_Neue'] tracking-wide text-lg">(202) 915-6514</a>
+                </div>
+            </div>
+
+            {/* MOBILE TOP NAV */}
+            <nav className="md:hidden bg-slate-900 border-b border-slate-800 flex justify-between items-center px-2 py-1 z-20 shrink-0 overflow-x-auto no-scrollbar">
+                <MobileTab icon={<LayoutGrid />} active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} label="Grid" />
+                <MobileTab icon={<AlertTriangle />} active={activeTab === 'incidents'} onClick={() => setActiveTab('incidents')} label="Incidents" />
+                <MobileTab icon={<Cpu />} active={activeTab === 'disabilities'} onClick={() => setActiveTab('disabilities')} label="Disabilities" />
+                <MobileTab icon={<Calendar />} active={activeTab === 'events'} onClick={() => setActiveTab('events')} label="Events" />
+                <MobileTab icon={<MapIcon />} active={activeTab === 'map'} onClick={() => setActiveTab('map')} label="Map" />
+            </nav>
+
+            <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 bg-slate-950 pb-24 md:pb-8">
+                
+                {activeTab === 'dashboard' && (
+                    <>
+                        <FleetStatusBar fleet={displayFlippy3} />
+                        
+                        <section>
+                            <div className="mb-4 border-b border-slate-800 pb-3">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                    <div>
+                                        <div className="flex items-center gap-3">
+                                            <span className="bg-slate-800 p-1.5 rounded text-[#5d3181]"><Zap className="w-4 h-4" /></span>
+                                            <h2 className="text-xl md:text-2xl font-bold text-white font-['Bebas_Neue'] tracking-wide">Flippy-3 Fleet</h2>
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-2 md:ml-11">
+                                            <CalendarClock className="w-3.5 h-3.5 text-[#a855f7]" />
+                                            <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Data Range: Last 7 Days</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                       <span className="text-[10px] font-bold text-slate-500 uppercase">Customer Brand:</span>
+                                       <select 
+                                          value={selectedBrand}
+                                          onChange={(e) => setSelectedBrand(e.target.value)}
+                                          className={`bg-slate-900 border border-slate-700 text-xs rounded p-1.5 font-bold focus:outline-none focus:border-[#5d3181] ${getBrandColor(selectedBrand)}`}
+                                       >
+                                         {availableBrands.map(b => <option key={b} value={b} className={getBrandColor(b)}>{b}</option>)}
+                                       </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <AvgCard title="Flippy-3" fleet={displayFlippy3} />
+                            <FleetGrid fleet={displayFlippy3} onSelect={(s) => { setSelectedSite(s); setHistoryFilterMonth('All'); }} />
+                        </section>
+                    </>
+                )}
+
+                {activeTab === 'incidents' && (
+                    <div className="max-w-5xl mx-auto">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="p-3 bg-red-900/30 rounded-xl border border-red-500/30"><AlertTriangle className="w-6 h-6 text-red-500" /></div>
+                            <h2 className="text-xl md:text-2xl font-bold text-white font-['Bebas_Neue'] tracking-wide">Active Incidents</h2>
+                        </div>
+                        <div className="bg-slate-900 rounded-2xl shadow-sm border border-slate-800 overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left text-slate-300 min-w-[600px]">
+                                    <thead className="bg-slate-800 text-slate-400 font-medium border-b border-slate-700 font-['Bebas_Neue'] text-lg tracking-wide">
+                                        <tr>
+                                            <th className="px-4 md:px-6 py-4 font-normal">Site Name</th>
+                                            <th className="px-4 md:px-6 py-4 font-normal">Status</th>
+                                            <th className="px-4 md:px-6 py-4 font-normal">Active Incident(s)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800">
+                                        {fleetData.filter(site => site.incidents && !site.incidents.toLowerCase().includes('n/a') && !site.incidents.toLowerCase().includes('none') && site.incidents.trim() !== '').map((site) => (
+                                            <tr key={site.id} className="hover:bg-slate-800/50 transition-colors">
+                                                <td className="px-4 md:px-6 py-4">
+                                                    <button onClick={() => { setSelectedSite(site); setHistoryFilterMonth('All'); }} className="font-bold text-white hover:text-[#5d3181] hover:underline text-left">
+                                                        {site.site}
+                                                    </button>
+                                                </td>
+                                                <td className="px-4 md:px-6 py-4"><StatusBadge status={site.status} /></td>
+                                                <td className="px-4 md:px-6 py-4 max-w-md">
+                                                    <div className="flex items-start gap-2 text-orange-400 bg-orange-900/20 px-2 py-2 rounded border border-orange-900/50">
+                                                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                                                        <div className="flex-1">{site.incidents.split('|').filter(s => s.trim() !== '').map((inc,i) => <div key={i}>{inc.trim()}</div>)}</div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {fleetData.filter(site => site.incidents && !site.incidents.toLowerCase().includes('n/a') && !site.incidents.toLowerCase().includes('none') && site.incidents.trim() !== '').length === 0 && (
+                                            <tr>
+                                                <td colSpan="3" className="px-6 py-12 text-center text-slate-500 italic">No active incidents reported across the fleet.</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'disabilities' && (
+                    <div className="max-w-5xl mx-auto">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="p-3 bg-orange-900/30 rounded-xl border border-orange-500/30"><Cpu className="w-6 h-6 text-orange-500" /></div>
+                            <h2 className="text-xl md:text-2xl font-bold text-white font-['Bebas_Neue'] tracking-wide">Active Disabilities</h2>
+                        </div>
+                        <div className="bg-slate-900 rounded-2xl shadow-sm border border-slate-800 overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left text-slate-300 min-w-[600px]">
+                                    <thead className="bg-slate-800 text-slate-400 font-medium border-b border-slate-700 font-['Bebas_Neue'] text-lg tracking-wide">
+                                        <tr>
+                                            <th className="px-4 md:px-6 py-4 font-normal">Site Name</th>
+                                            <th className="px-4 md:px-6 py-4 font-normal">Status</th>
+                                            <th className="px-4 md:px-6 py-4 font-normal text-center">Slot Disabilities</th>
+                                            <th className="px-4 md:px-6 py-4 font-normal text-center">Input Disabilities</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800">
+                                        {fleetData.filter(site => site.slotRate > 0 || site.inputRate > 0).map((site) => (
+                                            <tr key={site.id} className="hover:bg-slate-800/50 transition-colors">
+                                                <td className="px-4 md:px-6 py-4">
+                                                    <button onClick={() => { setSelectedSite(site); setHistoryFilterMonth('All'); }} className="font-bold text-white hover:text-[#5d3181] hover:underline text-left">
+                                                        {site.site}
+                                                    </button>
+                                                </td>
+                                                <td className="px-4 md:px-6 py-4"><StatusBadge status={site.status} /></td>
+                                                <td className="px-4 md:px-6 py-4 text-center">
+                                                    <span className={`font-bold ${site.slotRate > 0 ? 'text-orange-400' : 'text-slate-600'}`}>{site.slotRate}</span>
+                                                </td>
+                                                <td className="px-4 md:px-6 py-4 text-center">
+                                                    <span className={`font-bold ${site.inputRate > 0 ? 'text-orange-400' : 'text-slate-600'}`}>{site.inputRate}</span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {fleetData.filter(site => site.slotRate > 0 || site.inputRate > 0).length === 0 && (
+                                            <tr>
+                                                <td colSpan="4" className="px-6 py-12 text-center text-slate-500 italic">No active disabilities reported across the fleet.</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
+                {activeTab === 'events' && (
+                    <div className="max-w-6xl mx-auto h-full">
+                        <CalendarView fleetData={fleetData} />
+                    </div>
+                )}
+
+                {activeTab === 'map' && (
+                   <div className="h-full w-full flex flex-col md:flex-row gap-4">
+                      {/* LEFT LIST PANEL */}
+                      <div className="w-full md:w-1/3 min-w-[300px] bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden flex flex-col h-[300px] md:h-auto order-1 md:order-none">
+                          <div className="p-4 border-b border-slate-800 font-['Bebas_Neue'] text-xl text-white tracking-wide">Locations</div>
+                          <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
+                              {filteredData.map(site => (
+                                  <div key={site.id} onClick={() => { setSelectedSite(site); setHistoryFilterMonth('All'); }} className="p-3 hover:bg-slate-800 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-slate-700">
+                                      <div className="text-white font-bold text-sm">{site.site}</div>
+                                      <div className="text-slate-500 text-xs flex items-center gap-1 mt-1"><MapPin className="w-3 h-3"/> {site.address}</div>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+                      
+                      {/* RIGHT MAP PANEL */}
+                      <div className="flex-1 rounded-2xl overflow-hidden border border-slate-800 shadow-sm relative h-[400px] md:h-auto order-2 md:order-none">
+                          <FleetMap data={fleetData} onSelectSite={(s) => { setSelectedSite(s); setHistoryFilterMonth('All'); }} />
+                      </div>
+                   </div>
+                )}
+
+                {activeTab === 'settings' && (
+                    <div className="max-w-xl mx-auto p-8 bg-slate-900 rounded-2xl border border-slate-800">
+                        <h2 className="text-xl font-bold mb-4 text-white">Settings</h2>
+                        <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Data Source (Google Sheet CSV Link)</label>
+                        <div className="flex gap-2">
+                            <input type="text" value={sheetUrl} onChange={e => setSheetUrl(e.target.value)} className="flex-1 p-2 bg-slate-800 border border-slate-700 rounded text-sm text-white" />
+                            <button onClick={() => fetchSheetData(sheetUrl)} className="bg-[#5d3181] text-white px-4 py-2 rounded text-sm font-bold hover:bg-[#754c9f]">Save</button>
+                        </div>
+                    </div>
+                )}
+                
+                <footer className="text-center py-8 text-slate-600 text-xs border-t border-slate-800">
+                    <p className="font-bold mb-2 text-slate-500 font-['Bebas_Neue'] tracking-wider text-lg">MISO ROBOTICS INC.</p>
+                    <p>650 E Green St., Pasadena, CA 91101</p>
+                    <p className="mt-4 opacity-30">&copy; 2026 Miso Robotics. Confidential.</p>
+                </footer>
+            </div>
+          </main>
+
+          {/* DETAIL MODAL */}
+          {selectedSite && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+               <div className="bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-800">
+                  <div className="bg-slate-900 p-6 border-b border-slate-800 flex justify-between items-start shrink-0">
+                     <div>
+                        <h2 className="text-2xl md:text-3xl font-bold text-white font-['Bebas_Neue'] tracking-wide">{selectedSite.site}</h2>
+                        <div className="flex items-center gap-3 text-sm text-slate-400 mt-1">
+                            <span className="flex items-center gap-1"><Cpu className="w-3 h-3"/> {selectedSite.model}</span>
+                            <span className="flex items-center gap-1"><MapPin className="w-3 h-3"/> {selectedSite.address}</span>
+                        </div>
+                     </div>
+                     <button onClick={() => setSelectedSite(null)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white"><X className="w-6 h-6"/></button>
+                  </div>
+
+                  <div className="p-4 md:p-8 overflow-y-auto custom-scrollbar space-y-8">
+                      <div className="flex flex-col md:flex-row gap-6 items-center bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                          <div className="flex-1 w-full">
+                              <div className="flex justify-between md:block">
+                                  <StatusBadge status={selectedSite.status} />
+                              </div>
+                              <div className="mt-2 text-sm text-slate-400">Current Status</div>
+                          </div>
+                          
+                          <div className="flex items-center gap-4 w-full md:w-auto justify-end">
+                              <div className="text-right">
+                                  <div className="text-4xl font-black text-white font-['Bebas_Neue'] tracking-wider">{selectedSite.health}%</div>
+                                  <div className="text-xs text-slate-500 font-bold uppercase tracking-wider">Uptime Avg</div>
+                              </div>
+                          </div>
+                      </div>
+                      
+                      {/* DATA RANGE BANNER (INDIVIDUAL SITE) */}
+                      <div className="flex items-center gap-2 mb-2 ml-1">
+                         <CalendarClock className="w-4 h-4 text-[#a855f7]" />
+                         <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Data Range: Last 7 Days</span>
+                      </div>
+
+                      <div>
+                          <h3 className="font-bold text-white mb-3 flex items-center gap-2 font-['Bebas_Neue'] tracking-wide text-xl"><Activity className="w-4 h-4 text-slate-400"/> Disability Metrics</h3>
+                          {(() => {
+                              const limits = getDisabilityLimits(selectedSite.model);
+                              return (
+                                  <div className="grid grid-cols-3 gap-4">
+                                      <div className="bg-slate-800 p-3 rounded-lg border border-slate-700 text-center">
+                                          <div className="text-xl font-bold text-white">{selectedSite.slotRate}<span className="text-slate-500 text-sm"></span></div>
+                                          <div className="text-[10px] uppercase text-slate-400 font-bold mt-1">Slots</div>
+                                      </div>
+                                      <div className="bg-slate-800 p-3 rounded-lg border border-slate-700 text-center">
+                                          <div className="text-xl font-bold text-white">{selectedSite.inputRate}<span className="text-slate-500 text-sm"></span></div>
+                                          <div className="text-[10px] uppercase text-slate-400 font-bold mt-1">Inputs</div>
+                                      </div>
+                                      <div className="bg-slate-800 p-3 rounded-lg border border-slate-700 text-center">
+                                          <div className="text-xl font-bold text-white">{selectedSite.sensorCount}<span className="text-slate-500 text-sm"></span></div>
+                                          <div className="text-[10px] uppercase text-slate-400 font-bold mt-1">Sensors</div>
+                                      </div>
+                                  </div>
+                              )
+                          })()}
+                      </div>
+
+                      <div>
+                          <h3 className="font-bold text-white mb-3 flex items-center gap-2 font-['Bebas_Neue'] tracking-wide text-xl"><Bot className="w-4 h-4 text-slate-400"/> Performance Metrics</h3>
+                          <div className="grid grid-cols-2 gap-4">
+                              <div className="flex justify-between items-center p-3 bg-slate-800 border border-slate-700 rounded-lg">
+                                  <span className="text-sm text-slate-400">Unresolved Misgrabs</span>
+                                  <span className="font-bold text-white">{selectedSite.misgrabs}</span>
+                              </div>
+                              <div className="flex justify-between items-center p-3 bg-slate-800 border border-slate-700 rounded-lg">
+                                  <span className="text-sm text-slate-400">Unresolved Collisions</span>
+                                  <span className="font-bold text-white">{selectedSite.collisions}</span>
+                              </div>
+                          </div>
+                      </div>
+
+                      <div className="bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-700">
+                          <h3 className="font-bold text-slate-200 mb-4 flex items-center gap-2 font-['Bebas_Neue'] tracking-wide text-xl"><ClipboardList className="w-4 h-4 text-slate-400"/> Active Incidents</h3>
+                          {(!selectedSite.incidents || selectedSite.incidents.toLowerCase().includes('n/a') || selectedSite.incidents.toLowerCase().includes('none') || selectedSite.incidents.trim() === '') ?
+                            <div className="p-4 bg-emerald-900/20 text-emerald-400 rounded-lg flex items-center gap-3 text-sm border border-emerald-900/50"><CheckCircle2 className="w-4 h-4"/> All systems normal.</div> :
+                            <div className="p-5 bg-orange-900/20 text-orange-300 rounded-lg flex items-start gap-3 text-sm border border-orange-900/50">
+                                <AlertTriangle className="w-5 h-5 shrink-0 text-orange-500"/>
+                                <div className="flex-1">{selectedSite.incidents.split('|').filter(s => s.trim() !== '').map((inc, i) => <div key={i} className={i>0?"mt-2 pt-2 border-t border-orange-800/30":""}>{inc.trim()}</div>)}</div>
+                            </div>
+                          }
+                      </div>
+
+                      <div className="bg-slate-800 p-6 rounded-2xl shadow-sm border border-[#5d3181]/50 relative overflow-hidden">
+                          <div className="absolute top-0 right-0 w-24 h-24 bg-[#5d3181]/10 rounded-bl-full pointer-events-none"></div>
+                          <h3 className="font-bold text-slate-200 mb-4 flex items-center gap-2 relative z-10 font-['Bebas_Neue'] tracking-wide text-xl"><Calendar className="w-4 h-4 text-slate-400"/> Upcoming Events</h3>
+                          {(!selectedSite.upcoming || selectedSite.upcoming === '' || selectedSite.upcoming.trim() === '') ? 
+                            <p className="text-sm text-slate-500 italic pl-1">No upcoming events.</p> :
+                            <div className="space-y-3 relative z-10">
+                                {selectedSite.upcoming.split('|').filter(s => s.trim() !== '').map((evt, i) => {
+                                    const { hasDate, month, day, dayStr, cleanText, fullDateStr } = parseUpcomingDate(evt);
+                                    return (
+                                        <div key={i} className="flex items-center gap-4 group">
+                                            <div className="w-12 h-12 bg-[#5d3181] rounded-xl flex flex-col items-center justify-center text-white shrink-0 shadow-sm leading-tight">
+                                                {hasDate ? <><span className="text-[10px] font-bold opacity-80 uppercase">{month}</span><span className="text-sm font-bold">{day}</span></> : <Calendar className="w-5 h-5 opacity-80"/>}
+                                            </div>
+                                            <div className="flex-1 p-3 bg-slate-900 rounded-xl border border-slate-700 text-sm text-slate-300 font-medium">
+                                                {cleanText}
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                          }
+                      </div>
+
+                      <div className="bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-700">
+                          <div className="flex items-center justify-between mb-4">
+                             <h3 className="font-bold text-slate-200 flex items-center gap-2 font-['Bebas_Neue'] tracking-wide text-xl"><History className="w-4 h-4 text-slate-400"/> History</h3>
+                             
+                             {/* MONTH FILTER */}
+                             <div className="flex items-center gap-2">
+                               <Filter className="w-3 h-3 text-slate-500" />
+                               <select 
+                                  value={historyFilterMonth}
+                                  onChange={(e) => setHistoryFilterMonth(e.target.value)}
+                                  className="bg-slate-900 border border-slate-700 text-white text-xs rounded p-1 focus:outline-none focus:border-[#5d3181]"
+                               >
+                                 {historyMonthOptions.map(m => <option key={m} value={m}>{m}</option>)}
+                               </select>
+                             </div>
+                          </div>
+
+                          <div className="space-y-4 relative before:absolute before:inset-0 before:ml-2.5 before:w-0.5 before:bg-slate-700">
+                             {selectedSite.history && selectedSite.history
+                               .filter(log => {
+                                   if (!log.note || log.note.trim() === '') return false;
+                                   
+                                   if (historyFilterMonth === 'All') return true;
+                                   if (!log.date) return false;
+                                   
+                                   const parts = log.date.split('-');
+                                   if (parts.length < 2) return false;
+                                   const year = parseInt(parts[0]);
+                                   const month = parseInt(parts[1]) - 1; // 0-indexed
+                                   const dateObj = new Date(year, month, 1);
+                                   const monthStr = dateObj.toLocaleString('default', { month: 'long', year: 'numeric' });
+                                   
+                                   return monthStr === historyFilterMonth;
+                               })
+                               .map((log, i) => (
+                                 <div key={i} className="relative flex items-start pl-8 group">
+                                     <div className="absolute left-0 top-1 w-5 h-5 bg-slate-900 border-2 border-slate-600 rounded-full z-10 group-hover:border-[#5d3181] transition-colors"></div>
+                                     <div className="text-sm">
+                                         <span className="font-bold text-slate-300 block mb-0.5">{log.date || ''}</span>
+                                         <span className="text-slate-500">{log.note}</span>
+                                     </div>
+                                 </div>
+                             ))}
+                             {(!selectedSite.history || selectedSite.history.filter(s => s.note.trim() !== '').length === 0) && <p className="text-sm text-slate-500 italic pl-8">No history recorded.</p>}
+                          </div>
+                      </div>
+
+                  </div>
+               </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
