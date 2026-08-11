@@ -5,27 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Flippy Fleet CRM</title>
 
-  <!-- React & ReactDOM -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  
-  <!-- Babel for JSX compilation -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- Lucide Icons (UMD Build) -->
-  <script src="https://unpkg.com/lucide-react@0.330.0/dist/umd/lucide-react.min.js"></script>
-
-  <!-- Leaflet CSS & JS for Map -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <!-- Custom Fonts -->
+  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React & ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel for JSX compilation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- IMPORTANT FIX: Map React to lowercase 'react' for Lucide's UMD build -->
+  <script>window.react = window.React;</script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide-react@0.330.0/dist/umd/lucide-react.min.js"></script>
+
+  <!-- Leaflet Map CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
     body {
@@ -35,30 +38,13 @@
       -webkit-tap-highlight-color: transparent;
       font-family: 'Roboto', sans-serif;
     }
-    .custom-scrollbar::-webkit-scrollbar {
-      width: 6px;
-    }
-    .custom-scrollbar::-webkit-scrollbar-track {
-      background: rgba(30, 41, 59, 0.5);
-      border-radius: 4px;
-    }
-    .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: rgba(71, 85, 105, 0.8);
-      border-radius: 4px;
-    }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-      background: rgba(100, 116, 139, 1);
-    }
-    .no-scrollbar::-webkit-scrollbar {
-      display: none;
-    }
-    .no-scrollbar {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-    }
-    .animate-fade-in {
-      animation: fadeIn 0.2s ease-out forwards;
-    }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: rgba(30, 41, 59, 0.5); border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(71, 85, 105, 0.8); border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 1); }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
     @keyframes fadeIn {
       from { opacity: 0; transform: scale(0.98); }
       to { opacity: 1; transform: scale(1); }
@@ -69,10 +55,8 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    // --- EXTRACT REACT HOOKS (No imports allowed in browser) ---
     const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
-    // --- EXTRACT LUCIDE ICONS ---
     const { 
       Activity, MapPin, AlertTriangle, CheckCircle2, Search, Settings, 
       RefreshCw, Server, Phone, Clock, Battery, LayoutGrid, Map: MapIcon, 
@@ -92,7 +76,7 @@
           const date = new Date(year, monthIndex, day);
           
           const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-          const dayStr = "Event"; // Generic fallback
+          const dayStr = "Event"; 
           const cleanText = text.replace(match[0], '').trim();
           
           return { 
@@ -117,7 +101,7 @@
         if (b.includes('white castle')) return 'text-blue-400';
         if (b.includes('levy')) return 'text-red-400';
         if (b.includes('insert coin')) return 'text-purple-400';
-        return 'text-emerald-400';
+        return 'text-emerald-400'; 
     };
 
     // --- LEAFLET MAP COMPONENT ---
@@ -136,10 +120,11 @@
           }).setView([39.8283, -98.5795], 4); 
           mapInstance.current = map;
           
-          window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          const tileLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap',
             noWrap: true, bounds: bounds
-          }).addTo(map);
+          });
+          tileLayer.addTo(map);
 
           if(mapRef.current) {
               const style = document.createElement('style');
@@ -153,7 +138,6 @@
         };
 
         if (window.L) initMap();
-
         return () => {
           if (mapInstance.current) {
             mapInstance.current.remove();
@@ -162,8 +146,11 @@
         };
       }, []);
 
+      useEffect(() => {
+        if (mapInstance.current && window.L) updateMarkers(mapInstance.current);
+      }, [data]);
+
       const updateMarkers = (map) => {
-        if (!window.L) return;
         map.eachLayer((layer) => {
           if (layer instanceof window.L.Marker) map.removeLayer(layer);
         });
@@ -194,10 +181,6 @@
         });
         if (bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 12 });
       };
-
-      useEffect(() => {
-        if (mapInstance.current && window.L) updateMarkers(mapInstance.current);
-      }, [data]);
 
       return <div ref={mapRef} className="w-full h-full z-0 bg-slate-900 rounded-xl min-h-[600px]" />;
     };
@@ -249,22 +232,22 @@
     const FleetStatusBar = ({ fleet }) => {
         if (!fleet || fleet.length === 0) return null;
 
-        const counts = { operating: 0, robotDown: 0, service: 0, cleaning: 0, manual: 0, offline: 0 };
-        const sitesLists = { operating: [], robotDown: [], service: [], cleaning: [], manual: [], offline: [] };
+        const categorizedSites = { operating: [], robotDown: [], service: [], cleaning: [], manual: [], offline: [] };
 
         fleet.forEach(site => {
             const s = String(site.status).toLowerCase();
-            if (s.includes('operating') || s.includes('online')) { counts.operating++; sitesLists.operating.push(site.site); }
-            else if (s.includes('robot down')) { counts.robotDown++; sitesLists.robotDown.push(site.site); }
-            else if (s.includes('cleaning')) { counts.cleaning++; sitesLists.cleaning.push(site.site); }
-            else if (s.includes('service') || s.includes('progress')) { counts.service++; sitesLists.service.push(site.site); }
-            else if (s.includes('manual') || s.includes('voluntarily') || s.includes('voluntary')) { counts.manual++; sitesLists.manual.push(site.site); }
-            else { counts.offline++; sitesLists.offline.push(site.site); }
+            if (s.includes('operating') || s.includes('online')) categorizedSites.operating.push(site.site);
+            else if (s.includes('robot down')) categorizedSites.robotDown.push(site.site);
+            else if (s.includes('cleaning')) categorizedSites.cleaning.push(site.site);
+            else if (s.includes('service') || s.includes('progress')) categorizedSites.service.push(site.site);
+            else if (s.includes('manual') || s.includes('voluntarily') || s.includes('voluntary')) categorizedSites.manual.push(site.site);
+            else categorizedSites.offline.push(site.site); 
         });
 
         const total = fleet.length;
 
-        const StatItem = ({ label, count, sites, colorClass, dotClass, hideTooltip }) => {
+        const StatItem = ({ label, sites, colorClass, dotClass, hideTooltip }) => {
+            const count = sites.length;
             const displaySites = sites.slice(0, 10);
             const extra = count - 10;
             return (
@@ -274,13 +257,12 @@
                         {count}
                     </div>
                     <div className="text-[10px] text-slate-400 uppercase font-bold text-center leading-tight h-6 flex items-center">{label}</div>
-                    
                     {!hideTooltip && count > 0 && (
                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] p-3 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded shadow-xl z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
                             <div className="font-bold text-[#a855f7] border-b border-slate-800 pb-1 mb-1">{label} Sites:</div>
                             <ul className="text-left list-none space-y-0.5 m-0 p-0">
                                 {displaySites.map((site, i) => <li key={i} className="truncate text-[10px]">{site}</li>)}
-                                {extra > 0 && <li className="text-[10px] text-slate-500 italic mt-1">+{extra} more</li>}
+                                {extra > 0 && <li className="text-[10px] text-slate-500 italic mt-1">+{extra} more site{extra > 1 ? 's' : ''}</li>}
                             </ul>
                             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-700"></div>
                         </div>
@@ -299,21 +281,21 @@
                 </div>
 
                 <div className="w-full h-3 flex rounded-full overflow-hidden mb-6 bg-slate-800">
-                    {counts.operating > 0 && <div style={{width: `${(counts.operating/total)*100}%`}} className="bg-emerald-500 transition-all duration-1000" />}
-                    {counts.service > 0 && <div style={{width: `${(counts.service/total)*100}%`}} className="bg-[#a855f7] transition-all duration-1000" />}
-                    {counts.cleaning > 0 && <div style={{width: `${(counts.cleaning/total)*100}%`}} className="bg-blue-500 transition-all duration-1000" />}
-                    {counts.manual > 0 && <div style={{width: `${(counts.manual/total)*100}%`}} className="bg-yellow-500 transition-all duration-1000" />}
-                    {counts.robotDown > 0 && <div style={{width: `${(counts.robotDown/total)*100}%`}} className="bg-red-500 transition-all duration-1000" />}
-                    {counts.offline > 0 && <div style={{width: `${(counts.offline/total)*100}%`}} className="bg-slate-500 transition-all duration-1000" />}
+                    {categorizedSites.operating.length > 0 && <div style={{width: `${(categorizedSites.operating.length/total)*100}%`}} className="bg-emerald-500 transition-all duration-1000" title={`Operating: ${categorizedSites.operating.length}`} />}
+                    {categorizedSites.service.length > 0 && <div style={{width: `${(categorizedSites.service.length/total)*100}%`}} className="bg-[#a855f7] transition-all duration-1000" title={`Service: ${categorizedSites.service.length}`} />}
+                    {categorizedSites.cleaning.length > 0 && <div style={{width: `${(categorizedSites.cleaning.length/total)*100}%`}} className="bg-blue-500 transition-all duration-1000" title={`Cleaning: ${categorizedSites.cleaning.length}`} />}
+                    {categorizedSites.manual.length > 0 && <div style={{width: `${(categorizedSites.manual.length/total)*100}%`}} className="bg-yellow-500 transition-all duration-1000" title={`Manual: ${categorizedSites.manual.length}`} />}
+                    {categorizedSites.robotDown.length > 0 && <div style={{width: `${(categorizedSites.robotDown.length/total)*100}%`}} className="bg-red-500 transition-all duration-1000" title={`Robot Down: ${categorizedSites.robotDown.length}`} />}
+                    {categorizedSites.offline.length > 0 && <div style={{width: `${(categorizedSites.offline.length/total)*100}%`}} className="bg-slate-500 transition-all duration-1000" title={`Offline: ${categorizedSites.offline.length}`} />}
                 </div>
 
                 <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
-                    <StatItem label="Operating" count={counts.operating} sites={sitesLists.operating} colorClass="text-emerald-400" dotClass="bg-emerald-500 text-emerald-500" hideTooltip={true} />
-                    <StatItem label="Service In Progress" count={counts.service} sites={sitesLists.service} colorClass="text-[#a855f7]" dotClass="bg-[#a855f7] text-[#a855f7]" />
-                    <StatItem label="Cleaning" count={counts.cleaning} sites={sitesLists.cleaning} colorClass="text-blue-400" dotClass="bg-blue-500 text-blue-500" />
-                    <StatItem label="Voluntary Manual" count={counts.manual} sites={sitesLists.manual} colorClass="text-yellow-400" dotClass="bg-yellow-500 text-yellow-500" />
-                    <StatItem label="Robot Down" count={counts.robotDown} sites={sitesLists.robotDown} colorClass="text-red-400" dotClass="bg-red-500 text-red-500" />
-                    <StatItem label="Offline / Other" count={counts.offline} sites={sitesLists.offline} colorClass="text-slate-400" dotClass="bg-slate-500 text-slate-500" />
+                    <StatItem label="Operating" sites={categorizedSites.operating} colorClass="text-emerald-400" dotClass="bg-emerald-500 text-emerald-500" hideTooltip={true} />
+                    <StatItem label="Service In Progress" sites={categorizedSites.service} colorClass="text-[#a855f7]" dotClass="bg-[#a855f7] text-[#a855f7]" />
+                    <StatItem label="Cleaning" sites={categorizedSites.cleaning} colorClass="text-blue-400" dotClass="bg-blue-500 text-blue-500" />
+                    <StatItem label="Voluntary Manual" sites={categorizedSites.manual} colorClass="text-yellow-400" dotClass="bg-yellow-500 text-yellow-500" />
+                    <StatItem label="Robot Down" sites={categorizedSites.robotDown} colorClass="text-red-400" dotClass="bg-red-500 text-red-500" />
+                    <StatItem label="Offline / Other" sites={categorizedSites.offline} colorClass="text-slate-400" dotClass="bg-slate-500 text-slate-500" />
                 </div>
             </div>
         );
@@ -321,6 +303,7 @@
 
     const AvgCard = ({ title, fleet }) => {
         if (fleet.length === 0) return null;
+
         const avgHealth = Math.round(fleet.reduce((acc, curr) => acc + curr.health, 0) / fleet.length);
         const online = fleet.filter(d => (d.status||'').toLowerCase().includes('online') || (d.status||'').toLowerCase().includes('operating')).length;
         let ringColor = "text-emerald-500";
@@ -367,15 +350,15 @@
                 </div>
                 <div className="flex items-center justify-between pt-3 border-t border-slate-800">
                   <div className="text-center">
-                    <div className="text-[10px] text-slate-500 uppercase">Misgrabs</div>
+                    <div className="text-[10px] text-slate-500 uppercase">Unresolved Misgrabs</div>
                     <div className="text-sm font-bold text-slate-300">{site.misgrabs}</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-[10px] text-slate-500 uppercase">Collisions</div>
+                    <div className="text-[10px] text-slate-500 uppercase">Unresolved Collisions</div>
                     <div className="text-sm font-bold text-slate-300">{site.collisions}</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-[10px] text-slate-500 uppercase">Orders</div>
+                    <div className="text-[10px] text-slate-500 uppercase">Orders Cooked</div>
                     <div className="text-sm font-bold text-emerald-400">{site.orders || 0}</div>
                   </div>
                 </div>
@@ -438,6 +421,7 @@
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       const firstDayOfMonth = new Date(year, month, 1).getDay();
       const monthName = currentDate.toLocaleString('default', { month: 'long' });
+
       const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
       const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
       const now = new Date();
@@ -493,7 +477,7 @@
       );
     }
 
-    // --- CSV PARSER ---
+    // --- ADVANCED CSV PARSER ---
     const parseCSV = (text) => {
       if (!text || typeof text !== 'string') return [];
       const rows = [];
@@ -550,19 +534,24 @@
         };
 
         const siteName = getVal(['site name', 'location id', 'customer']) || values[0];
+        const brand = String(getVal(['customer brand', 'brand', 'customer']) || 'Unknown');
         const status = getVal(['status']);
+        
         if (!siteName || typeof siteName !== 'string' || siteName.trim() === '') return null;
         if (!status && !getVal(['address']) && !getVal(['health'])) return null;
         if (String(siteName).toLowerCase().includes('total')) return null;
 
         const stableId = String(siteName).trim().toLowerCase().replace(/[^a-z0-9]/g, '-');
-        const brand = String(getVal(['customer brand', 'brand', 'customer']) || 'Unknown');
+
         let modelRaw = String(getVal(['product model', 'model']) || 'Unknown');
-        if (!modelRaw || modelRaw === 'Unknown') modelRaw = 'Flippy-3'; // Force Default
+        if (modelRaw.toLowerCase().includes('flippy 3') || modelRaw.toLowerCase().includes('flippy-3')) modelRaw = 'Flippy-3';
 
         let health = getNum(['health']);
         const uptime = getNum(['f3 uptime', 'uptime']);
-        if (uptime > 0) health = uptime; 
+        
+        if (modelRaw === 'Flippy-3' && uptime > 0) {
+            health = uptime; 
+        }
 
         const rawHistory = getVal(['history', 'incident history', 'log']);
         let parsedHistory = [];
@@ -607,13 +596,13 @@
       }).filter(item => item !== null);
     };
 
-    // --- MAIN APP COMPONENT ---
+    // --- MAIN APP ---
     function FlippyFleetCRM() {
       const [activeTab, setActiveTab] = useState('dashboard');
       const [selectedSite, setSelectedSite] = useState(null);
       const [historyFilterMonth, setHistoryFilterMonth] = useState('All');
       const [selectedBrand, setSelectedBrand] = useState('All');
-
+      
       // 🔥 PASTE YOUR GOOGLE SHEET LINK HERE 🔥
       const HARDCODED_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQeMrZAlTI97lnuFD2Wa6Pbyvrzsg6odRNrL6XxvavRtdRMBvQBSTpqEW_pqhS-3UZp_BIrVFDlvwy8/pub?gid=0&single=true&output=csv';
 
@@ -632,21 +621,27 @@
       const [showRotatePrompt, setShowRotatePrompt] = useState(false);
 
       useEffect(() => {
+        if (!sheetUrl) setActiveTab('settings');
+      }, [sheetUrl]);
+
+      useEffect(() => {
         const checkOrientation = () => {
-           if (window.innerWidth < window.innerHeight && window.innerWidth < 768) {
-               setShowRotatePrompt(true);
-           } else {
-               setShowRotatePrompt(false);
-           }
+           if (window.innerWidth < window.innerHeight && window.innerWidth < 768) setShowRotatePrompt(true);
+           else setShowRotatePrompt(false);
         };
         window.addEventListener('resize', checkOrientation);
         checkOrientation();
         return () => window.removeEventListener('resize', checkOrientation);
       }, []);
 
-      const fetchSheetData = useCallback(async (url) => {
-        if (!url || url.includes('PASTE_YOUR')) return;
-        setSyncError(false);
+      const fetchSheetData = useCallback(async (urlToFetch = sheetUrl) => {
+        if (!urlToFetch || urlToFetch.includes('PASTE_YOUR')) {
+            setLoading(false);
+            return;
+        }
+
+        if (fleetData.length === 0) setLoading(true);
+        setSyncError(false); 
         
         const processCSV = (text) => {
             if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) throw new Error('Invalid Link: URL returned HTML instead of CSV.');
@@ -655,19 +650,19 @@
             setFleetData(parsedData);
             setLastUpdated(new Date());
             setError(null);
-            localStorage.setItem('flippy_fleet_sheet_url', url);
+            localStorage.setItem('flippy_fleet_sheet_url', urlToFetch);
         };
 
         try {
-          const sep = url.includes('?') ? '&' : '?';
-          const directUrl = `${url}${sep}t=${Date.now()}`;
+          const sep = urlToFetch.includes('?') ? '&' : '?';
+          const directUrl = `${urlToFetch}${sep}t=${Date.now()}`;
           const response = await fetch(directUrl);
           if (!response.ok) throw new Error('Direct fetch failed');
           const text = await response.text();
           processCSV(text);
         } catch (err) {
           try {
-              const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+              const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(urlToFetch)}`;
               const response = await fetch(proxyUrl);
               if (!response.ok) throw new Error(`Proxy fetch failed`);
               const text = await response.text();
@@ -679,16 +674,15 @@
                   return prev;
               });
           }
+        } finally {
+          setLoading(false);
         }
-      }, []);
+      }, [sheetUrl, fleetData.length]);
 
       useEffect(() => {
         let isMounted = true;
         if (sheetUrl && !sheetUrl.includes('PASTE_YOUR')) {
-          setLoading(true);
-          fetchSheetData(sheetUrl).finally(() => {
-              if (isMounted) setLoading(false);
-          });
+          fetchSheetData(sheetUrl).finally(() => { if (isMounted) setLoading(false); });
           const intervalId = setInterval(() => fetchSheetData(sheetUrl), 60000);
           return () => { isMounted = false; clearInterval(intervalId); };
         }
@@ -701,7 +695,7 @@
         );
       }, [fleetData, searchTerm]);
 
-      const flippy3 = filteredData;
+      const flippy3 = filteredData.filter(d => d.model.toLowerCase().includes('flippy-3') || d.model.toLowerCase().includes('flippy 3'));
 
       const availableBrands = useMemo(() => {
         const brands = new Set(flippy3.map(site => site.brand).filter(b => b !== 'Unknown' && b !== ''));
@@ -715,7 +709,7 @@
 
       const historyMonthOptions = useMemo(() => {
         const options = ['All'];
-        const start = new Date(2025, 9, 1);
+        const start = new Date(2025, 9, 1); 
         const now = new Date();
         const end = now > new Date(2026, 1, 1) ? now : new Date(2026, 1, 1);
         let curr = new Date(start);
@@ -736,7 +730,7 @@
           );
       }
 
-      if (loading && fleetData.length === 0) {
+      if (loading && fleetData.length === 0 && activeTab !== 'settings') {
           return (
               <div className="flex h-screen items-center justify-center bg-[#A7A1AF] flex-col gap-4">
                   <RefreshCw className="w-10 h-10 text-[#5d3181] animate-spin" />
@@ -764,6 +758,7 @@
               <NavButton icon={<Cpu />} active={activeTab === 'disabilities'} onClick={() => setActiveTab('disabilities')} label="Disabilities" />
               <NavButton icon={<Calendar />} active={activeTab === 'events'} onClick={() => setActiveTab('events')} label="Upcoming Events" />
               <NavButton icon={<MapIcon />} active={activeTab === 'map'} onClick={() => setActiveTab('map')} label="Map" />
+              <NavButton icon={<Settings />} active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} label="Config" />
             </nav>
           </aside>
 
@@ -874,6 +869,11 @@
                                                 </td>
                                             </tr>
                                         ))}
+                                        {fleetData.filter(site => site.incidents && !site.incidents.toLowerCase().includes('n/a') && !site.incidents.toLowerCase().includes('none') && site.incidents.trim() !== '').length === 0 && (
+                                            <tr>
+                                                <td colSpan="3" className="px-6 py-12 text-center text-slate-500 italic">No active incidents reported across the fleet.</td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
@@ -915,6 +915,11 @@
                                                 </td>
                                             </tr>
                                         ))}
+                                        {fleetData.filter(site => site.slotRate > 0 || site.inputRate > 0).length === 0 && (
+                                            <tr>
+                                                <td colSpan="4" className="px-6 py-12 text-center text-slate-500 italic">No active disabilities reported across the fleet.</td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
@@ -946,6 +951,17 @@
                       </div>
                    </div>
                 )}
+
+                {activeTab === 'settings' && (
+                    <div className="max-w-xl mx-auto p-8 bg-slate-900 rounded-2xl border border-slate-800">
+                        <h2 className="text-xl font-bold mb-4 text-white">Settings</h2>
+                        <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Data Source (Google Sheet CSV Link)</label>
+                        <div className="flex gap-2">
+                            <input type="text" value={sheetUrl} onChange={e => setSheetUrl(e.target.value)} className="flex-1 p-2 bg-slate-800 border border-slate-700 rounded text-sm text-white" />
+                            <button onClick={() => fetchSheetData(sheetUrl)} className="bg-[#5d3181] text-white px-4 py-2 rounded text-sm font-bold hover:bg-[#754c9f]">Save</button>
+                        </div>
+                    </div>
+                )}
                 
                 <footer className="text-center py-8 text-slate-600 text-xs border-t border-slate-800">
                     <p className="font-bold mb-2 text-slate-500 font-['Bebas_Neue'] tracking-wider text-lg">MISO ROBOTICS INC.</p>
@@ -955,6 +971,7 @@
             </div>
           </main>
 
+          {/* DETAIL MODAL */}
           {selectedSite && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
                <div className="bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-800">
@@ -1065,8 +1082,6 @@
                       <div className="bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-700">
                           <div className="flex items-center justify-between mb-4">
                              <h3 className="font-bold text-slate-200 flex items-center gap-2 font-['Bebas_Neue'] tracking-wide text-xl"><History className="w-4 h-4 text-slate-400"/> History</h3>
-                             
-                             {/* MONTH FILTER */}
                              <div className="flex items-center gap-2">
                                <Filter className="w-3 h-3 text-slate-500" />
                                <select 
@@ -1083,7 +1098,6 @@
                              {selectedSite.history && selectedSite.history
                                .filter(log => {
                                    if (!log.note || log.note.trim() === '') return false;
-                                   
                                    if (historyFilterMonth === 'All') return true;
                                    if (!log.date) return false;
                                    
