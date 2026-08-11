@@ -18,9 +18,8 @@
   <!-- Lucide Icons (UMD Build) -->
   <script src="https://unpkg.com/lucide-react@0.330.0/dist/umd/lucide-react.min.js"></script>
 
-  <!-- Leaflet CSS for Map -->
+  <!-- Leaflet CSS & JS for Map -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <!-- Custom Fonts -->
@@ -69,7 +68,8 @@
 <body>
   <div id="root"></div>
 
-  <script type="text/babel" data-type="module">
+  <script type="text/babel">
+    // --- EXTRACT REACT HOOKS (No imports allowed in browser) ---
     const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
     // --- EXTRACT LUCIDE ICONS ---
@@ -82,7 +82,6 @@
     } = window.lucideReact;
 
     // --- HELPER FUNCTIONS ---
-
     const parseUpcomingDate = (text) => {
        if (!text || typeof text !== 'string') return { hasDate: false, cleanText: String(text || '') };
        const match = text.match(/(\d{4})-(\d{2})-(\d{2})/);
@@ -93,7 +92,7 @@
           const date = new Date(year, monthIndex, day);
           
           const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-          const dayStr = "Event"; 
+          const dayStr = "Event"; // Generic fallback
           const cleanText = text.replace(match[0], '').trim();
           
           return { 
@@ -137,11 +136,10 @@
           }).setView([39.8283, -98.5795], 4); 
           mapInstance.current = map;
           
-          const tileLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap',
             noWrap: true, bounds: bounds
-          });
-          tileLayer.addTo(map);
+          }).addTo(map);
 
           if(mapRef.current) {
               const style = document.createElement('style');
@@ -154,9 +152,7 @@
           updateMarkers(map);
         };
 
-        if (window.L) {
-            initMap();
-        }
+        if (window.L) initMap();
 
         return () => {
           if (mapInstance.current) {
@@ -207,31 +203,22 @@
     };
 
     // --- SUB COMPONENTS ---
+    const NavButton = ({ icon, active, onClick, label }) => (
+      <button onClick={onClick} className={`w-full p-3 rounded-xl flex flex-col items-center gap-1 transition-all ${active ? 'bg-[#5d3181] text-white shadow-inner' : 'text-slate-500 hover:bg-slate-800 hover:text-white'}`}>
+        {React.cloneElement(icon, { size: 20 })}
+        <span className="text-[10px] font-medium text-center leading-tight hidden md:block">{label}</span>
+      </button>
+    );
 
-    const NavButton = ({ icon, active, onClick, label }) => {
-      return (
-        <button onClick={onClick} className={`w-full p-3 rounded-xl flex flex-col items-center gap-1 transition-all ${active ? 'bg-[#5d3181] text-white shadow-inner' : 'text-slate-500 hover:bg-slate-800 hover:text-white'}`}>
-          {React.cloneElement(icon, { size: 20 })}
-          <span className="text-[10px] font-medium text-center leading-tight hidden md:block">{label}</span>
-        </button>
-      );
-    };
-
-    const MobileTab = ({ icon, active, onClick, label }) => {
-      return (
-        <button 
-          onClick={onClick} 
-          className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all flex-1 ${active ? 'text-[#5d3181] bg-slate-800' : 'text-slate-400 hover:bg-slate-800'}`}
-        >
-          {React.cloneElement(icon, { size: 18 })}
-          <span className="text-[10px] font-medium mt-1">{label}</span>
-        </button>
-      );
-    };
+    const MobileTab = ({ icon, active, onClick, label }) => (
+      <button onClick={onClick} className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all flex-1 ${active ? 'text-[#5d3181] bg-slate-800' : 'text-slate-400 hover:bg-slate-800'}`}>
+        {React.cloneElement(icon, { size: 18 })}
+        <span className="text-[10px] font-medium mt-1">{label}</span>
+      </button>
+    );
 
     const StatusBadge = ({ status }) => {
       const s = String(status || 'Offline').toLowerCase();
-      
       let activeStyle = "bg-slate-800 text-slate-400 border-slate-700";
       let Icon = <ShieldAlert className="w-3 h-3 mr-1" />;
 
@@ -262,32 +249,24 @@
     const FleetStatusBar = ({ fleet }) => {
         if (!fleet || fleet.length === 0) return null;
 
-        const categorizedSites = {
-            operating: [],
-            robotDown: [],
-            service: [],
-            cleaning: [],
-            manual: [],
-            offline: []
-        };
+        const counts = { operating: 0, robotDown: 0, service: 0, cleaning: 0, manual: 0, offline: 0 };
+        const sitesLists = { operating: [], robotDown: [], service: [], cleaning: [], manual: [], offline: [] };
 
         fleet.forEach(site => {
             const s = String(site.status).toLowerCase();
-            if (s.includes('operating') || s.includes('online')) categorizedSites.operating.push(site.site);
-            else if (s.includes('robot down')) categorizedSites.robotDown.push(site.site);
-            else if (s.includes('cleaning')) categorizedSites.cleaning.push(site.site);
-            else if (s.includes('service') || s.includes('progress')) categorizedSites.service.push(site.site);
-            else if (s.includes('manual') || s.includes('voluntarily') || s.includes('voluntary')) categorizedSites.manual.push(site.site);
-            else categorizedSites.offline.push(site.site); 
+            if (s.includes('operating') || s.includes('online')) { counts.operating++; sitesLists.operating.push(site.site); }
+            else if (s.includes('robot down')) { counts.robotDown++; sitesLists.robotDown.push(site.site); }
+            else if (s.includes('cleaning')) { counts.cleaning++; sitesLists.cleaning.push(site.site); }
+            else if (s.includes('service') || s.includes('progress')) { counts.service++; sitesLists.service.push(site.site); }
+            else if (s.includes('manual') || s.includes('voluntarily') || s.includes('voluntary')) { counts.manual++; sitesLists.manual.push(site.site); }
+            else { counts.offline++; sitesLists.offline.push(site.site); }
         });
 
         const total = fleet.length;
 
-        const StatItem = ({ label, sites, colorClass, dotClass, hideTooltip }) => {
-            const count = sites.length;
+        const StatItem = ({ label, count, sites, colorClass, dotClass, hideTooltip }) => {
             const displaySites = sites.slice(0, 10);
             const extra = count - 10;
-            
             return (
                 <div className="flex flex-col items-center justify-center p-3 bg-slate-800/50 rounded-xl border border-slate-700/50 relative group">
                     <div className={`text-2xl font-bold ${colorClass} mb-1 flex items-center gap-2 ${!hideTooltip && count > 0 ? 'cursor-help' : 'cursor-default'}`}>
@@ -299,9 +278,9 @@
                     {!hideTooltip && count > 0 && (
                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] p-3 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded shadow-xl z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
                             <div className="font-bold text-[#a855f7] border-b border-slate-800 pb-1 mb-1">{label} Sites:</div>
-                            <ul className="text-left list-none space-y-0.5">
+                            <ul className="text-left list-none space-y-0.5 m-0 p-0">
                                 {displaySites.map((site, i) => <li key={i} className="truncate text-[10px]">{site}</li>)}
-                                {extra > 0 && <li className="text-[10px] text-slate-500 italic mt-1">+{extra} more site{extra > 1 ? 's' : ''}</li>}
+                                {extra > 0 && <li className="text-[10px] text-slate-500 italic mt-1">+{extra} more</li>}
                             </ul>
                             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-700"></div>
                         </div>
@@ -320,21 +299,21 @@
                 </div>
 
                 <div className="w-full h-3 flex rounded-full overflow-hidden mb-6 bg-slate-800">
-                    {categorizedSites.operating.length > 0 && <div style={{width: `${(categorizedSites.operating.length/total)*100}%`}} className="bg-emerald-500 transition-all duration-1000" title={`Operating: ${categorizedSites.operating.length}`} />}
-                    {categorizedSites.service.length > 0 && <div style={{width: `${(categorizedSites.service.length/total)*100}%`}} className="bg-[#a855f7] transition-all duration-1000" title={`Service: ${categorizedSites.service.length}`} />}
-                    {categorizedSites.cleaning.length > 0 && <div style={{width: `${(categorizedSites.cleaning.length/total)*100}%`}} className="bg-blue-500 transition-all duration-1000" title={`Cleaning: ${categorizedSites.cleaning.length}`} />}
-                    {categorizedSites.manual.length > 0 && <div style={{width: `${(categorizedSites.manual.length/total)*100}%`}} className="bg-yellow-500 transition-all duration-1000" title={`Manual: ${categorizedSites.manual.length}`} />}
-                    {categorizedSites.robotDown.length > 0 && <div style={{width: `${(categorizedSites.robotDown.length/total)*100}%`}} className="bg-red-500 transition-all duration-1000" title={`Robot Down: ${categorizedSites.robotDown.length}`} />}
-                    {categorizedSites.offline.length > 0 && <div style={{width: `${(categorizedSites.offline.length/total)*100}%`}} className="bg-slate-500 transition-all duration-1000" title={`Offline: ${categorizedSites.offline.length}`} />}
+                    {counts.operating > 0 && <div style={{width: `${(counts.operating/total)*100}%`}} className="bg-emerald-500 transition-all duration-1000" />}
+                    {counts.service > 0 && <div style={{width: `${(counts.service/total)*100}%`}} className="bg-[#a855f7] transition-all duration-1000" />}
+                    {counts.cleaning > 0 && <div style={{width: `${(counts.cleaning/total)*100}%`}} className="bg-blue-500 transition-all duration-1000" />}
+                    {counts.manual > 0 && <div style={{width: `${(counts.manual/total)*100}%`}} className="bg-yellow-500 transition-all duration-1000" />}
+                    {counts.robotDown > 0 && <div style={{width: `${(counts.robotDown/total)*100}%`}} className="bg-red-500 transition-all duration-1000" />}
+                    {counts.offline > 0 && <div style={{width: `${(counts.offline/total)*100}%`}} className="bg-slate-500 transition-all duration-1000" />}
                 </div>
 
                 <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
-                    <StatItem label="Operating" sites={categorizedSites.operating} colorClass="text-emerald-400" dotClass="bg-emerald-500 text-emerald-500" hideTooltip={true} />
-                    <StatItem label="Service In Progress" sites={categorizedSites.service} colorClass="text-[#a855f7]" dotClass="bg-[#a855f7] text-[#a855f7]" />
-                    <StatItem label="Cleaning" sites={categorizedSites.cleaning} colorClass="text-blue-400" dotClass="bg-blue-500 text-blue-500" />
-                    <StatItem label="Voluntary Manual" sites={categorizedSites.manual} colorClass="text-yellow-400" dotClass="bg-yellow-500 text-yellow-500" />
-                    <StatItem label="Robot Down" sites={categorizedSites.robotDown} colorClass="text-red-400" dotClass="bg-red-500 text-red-500" />
-                    <StatItem label="Offline / Other" sites={categorizedSites.offline} colorClass="text-slate-400" dotClass="bg-slate-500 text-slate-500" />
+                    <StatItem label="Operating" count={counts.operating} sites={sitesLists.operating} colorClass="text-emerald-400" dotClass="bg-emerald-500 text-emerald-500" hideTooltip={true} />
+                    <StatItem label="Service In Progress" count={counts.service} sites={sitesLists.service} colorClass="text-[#a855f7]" dotClass="bg-[#a855f7] text-[#a855f7]" />
+                    <StatItem label="Cleaning" count={counts.cleaning} sites={sitesLists.cleaning} colorClass="text-blue-400" dotClass="bg-blue-500 text-blue-500" />
+                    <StatItem label="Voluntary Manual" count={counts.manual} sites={sitesLists.manual} colorClass="text-yellow-400" dotClass="bg-yellow-500 text-yellow-500" />
+                    <StatItem label="Robot Down" count={counts.robotDown} sites={sitesLists.robotDown} colorClass="text-red-400" dotClass="bg-red-500 text-red-500" />
+                    <StatItem label="Offline / Other" count={counts.offline} sites={sitesLists.offline} colorClass="text-slate-400" dotClass="bg-slate-500 text-slate-500" />
                 </div>
             </div>
         );
@@ -342,7 +321,6 @@
 
     const AvgCard = ({ title, fleet }) => {
         if (fleet.length === 0) return null;
-
         const avgHealth = Math.round(fleet.reduce((acc, curr) => acc + curr.health, 0) / fleet.length);
         const online = fleet.filter(d => (d.status||'').toLowerCase().includes('online') || (d.status||'').toLowerCase().includes('operating')).length;
         let ringColor = "text-emerald-500";
@@ -372,14 +350,12 @@
     const FleetGrid = ({ fleet, onSelect }) => {
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {fleet.map(site => {
-                return (
+            {fleet.map(site => (
               <div key={site.id} onClick={() => onSelect(site)} className="bg-slate-900 rounded-xl p-4 shadow-sm border border-slate-800 hover:border-[#5d3181] transition-all cursor-pointer group">
                 <div className="flex justify-between items-start mb-3">
                   <h4 className="font-bold text-white truncate pr-2 group-hover:text-[#a855f7]">{site.site}</h4>
                   <StatusBadge status={site.status} />
                 </div>
-                
                 <div className="mb-4">
                   <div className="flex justify-between text-xs text-slate-400 mb-1">
                     <span>Uptime</span>
@@ -389,30 +365,26 @@
                     <div className={`h-1.5 rounded-full ${site.health > 79 ? 'bg-emerald-500' : site.health > 49 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{width: `${site.health}%`}}></div>
                   </div>
                 </div>
-                
                 <div className="flex items-center justify-between pt-3 border-t border-slate-800">
                   <div className="text-center">
-                    <div className="text-[10px] text-slate-500 uppercase">Unresolved Misgrabs</div>
+                    <div className="text-[10px] text-slate-500 uppercase">Misgrabs</div>
                     <div className="text-sm font-bold text-slate-300">{site.misgrabs}</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-[10px] text-slate-500 uppercase">Unresolved Collisions</div>
+                    <div className="text-[10px] text-slate-500 uppercase">Collisions</div>
                     <div className="text-sm font-bold text-slate-300">{site.collisions}</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-[10px] text-slate-500 uppercase">Orders Cooked</div>
+                    <div className="text-[10px] text-slate-500 uppercase">Orders</div>
                     <div className="text-sm font-bold text-emerald-400">{site.orders || 0}</div>
                   </div>
                 </div>
-
               </div>
-                );
-            })}
+            ))}
           </div>
         );
     };
 
-    // --- CALENDAR VIEW COMPONENT ---
     const CalendarView = ({ fleetData }) => {
       const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -438,7 +410,6 @@
               }
             });
           }
-          
           if (site.history && Array.isArray(site.history)) {
              site.history.forEach(log => {
                  if (log.date && log.note && log.note.trim() !== '') {
@@ -464,14 +435,11 @@
 
       const year = currentDate.getFullYear();
       const month = currentDate.getMonth();
-      
       const daysInMonth = new Date(year, month + 1, 0).getDate();
-      const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0 = Sun
+      const firstDayOfMonth = new Date(year, month, 1).getDay();
       const monthName = currentDate.toLocaleString('default', { month: 'long' });
-
       const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
       const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
-
       const now = new Date();
       const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
 
@@ -490,14 +458,7 @@
                  <div className={`text-xs font-bold mb-1 ${isToday ? 'text-[#a855f7]' : 'text-slate-500'}`}>{d}</div>
                  <div className="space-y-1">
                    {dayEvents.map(ev => (
-                     <div 
-                        key={ev.id} 
-                        className={`text-[10px] p-1 border rounded ${
-                            ev.isHistory 
-                            ? 'bg-slate-800 border-slate-700/50 text-slate-400' 
-                            : 'bg-[#5d3181]/20 border-[#5d3181]/30 text-slate-200'
-                        }`}
-                     >
+                     <div key={ev.id} className={`text-[10px] p-1 border rounded ${ev.isHistory ? 'bg-slate-800 border-slate-700/50 text-slate-400' : 'bg-[#5d3181]/20 border-[#5d3181]/30 text-slate-200'}`}>
                         <span className={`font-bold ${ev.isHistory ? 'text-slate-500' : 'text-[#a855f7]'}`}>{ev.site}</span>: {ev.desc}
                      </div>
                    ))}
@@ -532,14 +493,13 @@
       );
     }
 
-    // --- ADVANCED CSV PARSER ---
+    // --- CSV PARSER ---
     const parseCSV = (text) => {
       if (!text || typeof text !== 'string') return [];
       const rows = [];
       let currentRow = [];
       let currentCell = '';
       let inQuotes = false;
-      
       const cleanText = String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
       for (let i = 0; i < cleanText.length; i++) {
@@ -591,23 +551,18 @@
 
         const siteName = getVal(['site name', 'location id', 'customer']) || values[0];
         const status = getVal(['status']);
-        
         if (!siteName || typeof siteName !== 'string' || siteName.trim() === '') return null;
         if (!status && !getVal(['address']) && !getVal(['health'])) return null;
         if (String(siteName).toLowerCase().includes('total')) return null;
 
         const stableId = String(siteName).trim().toLowerCase().replace(/[^a-z0-9]/g, '-');
         const brand = String(getVal(['customer brand', 'brand', 'customer']) || 'Unknown');
-
         let modelRaw = String(getVal(['product model', 'model']) || 'Unknown');
-        if (modelRaw.toLowerCase().includes('flippy 3') || modelRaw.toLowerCase().includes('flippy-3')) modelRaw = 'Flippy-3';
+        if (!modelRaw || modelRaw === 'Unknown') modelRaw = 'Flippy-3'; // Force Default
 
         let health = getNum(['health']);
         const uptime = getNum(['f3 uptime', 'uptime']);
-        
-        if (modelRaw === 'Flippy-3' && uptime > 0) {
-            health = uptime; 
-        }
+        if (uptime > 0) health = uptime; 
 
         const rawHistory = getVal(['history', 'incident history', 'log']);
         let parsedHistory = [];
@@ -615,12 +570,7 @@
             parsedHistory = rawHistory.split('|').map(entry => {
                 const trimmed = entry.trim();
                 const dateMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})[:\s-]*(.*)/);
-                if (dateMatch) {
-                    return { 
-                        date: dateMatch[1], 
-                        note: dateMatch[2].trim() 
-                    };
-                }
+                if (dateMatch) return { date: dateMatch[1], note: dateMatch[2].trim() };
                 return { date: '', note: trimmed };
             });
         }
@@ -632,7 +582,7 @@
         if (rawLng > 0) rawLng = -rawLng;
 
         return {
-          id: stableId + '-' + index, 
+          id: stableId + '-' + index,
           site: String(siteName).trim(),
           brand: brand,
           model: modelRaw,
@@ -657,15 +607,15 @@
       }).filter(item => item !== null);
     };
 
-    // --- MAIN APP ---
-
-    function App() {
+    // --- MAIN APP COMPONENT ---
+    function FlippyFleetCRM() {
       const [activeTab, setActiveTab] = useState('dashboard');
       const [selectedSite, setSelectedSite] = useState(null);
       const [historyFilterMonth, setHistoryFilterMonth] = useState('All');
       const [selectedBrand, setSelectedBrand] = useState('All');
-      
-      const HARDCODED_SHEET_URL = 'PASTE_YOUR_GOOGLE_SHEET_LINK_HERE';
+
+      // 🔥 PASTE YOUR GOOGLE SHEET LINK HERE 🔥
+      const HARDCODED_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQeMrZAlTI97lnuFD2Wa6Pbyvrzsg6odRNrL6XxvavRtdRMBvQBSTpqEW_pqhS-3UZp_BIrVFDlvwy8/pub?gid=0&single=true&output=csv';
 
       const [sheetUrl, setSheetUrl] = useState(() => {
         let url = HARDCODED_SHEET_URL.trim().replace(/^['"]|['"]$/g, ''); 
@@ -679,7 +629,6 @@
       const [syncError, setSyncError] = useState(false);
       const [searchTerm, setSearchTerm] = useState('');
       const [lastUpdated, setLastUpdated] = useState(null);
-
       const [showRotatePrompt, setShowRotatePrompt] = useState(false);
 
       useEffect(() => {
@@ -695,42 +644,35 @@
         return () => window.removeEventListener('resize', checkOrientation);
       }, []);
 
-      const fetchSheetData = useCallback(async (urlToFetch) => {
-        if (!urlToFetch || urlToFetch.includes('PASTE_YOUR')) return;
-
+      const fetchSheetData = useCallback(async (url) => {
+        if (!url || url.includes('PASTE_YOUR')) return;
         setSyncError(false);
         
         const processCSV = (text) => {
-            if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
-                throw new Error('Invalid Link: URL returned HTML instead of CSV.');
-            }
+            if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) throw new Error('Invalid Link: URL returned HTML instead of CSV.');
             const parsedData = parseCSV(text);
             if (parsedData.length === 0) throw new Error('Connected, but found 0 valid rows.');
             setFleetData(parsedData);
             setLastUpdated(new Date());
             setError(null);
-            localStorage.setItem('flippy_fleet_sheet_url', urlToFetch);
+            localStorage.setItem('flippy_fleet_sheet_url', url);
         };
 
         try {
-          const sep = urlToFetch.includes('?') ? '&' : '?';
-          const directUrl = `${urlToFetch}${sep}t=${Date.now()}`;
+          const sep = url.includes('?') ? '&' : '?';
+          const directUrl = `${url}${sep}t=${Date.now()}`;
           const response = await fetch(directUrl);
-          
           if (!response.ok) throw new Error('Direct fetch failed');
           const text = await response.text();
           processCSV(text);
-
         } catch (err) {
-          console.warn("Direct fetch failed, falling back to proxy...", err);
           try {
-              const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(urlToFetch)}`;
+              const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
               const response = await fetch(proxyUrl);
               if (!response.ok) throw new Error(`Proxy fetch failed`);
               const text = await response.text();
               processCSV(text);
           } catch (finalErr) {
-              console.error("Connection failed", finalErr);
               setSyncError(true); 
               setFleetData(prev => {
                   if (prev.length === 0) setError("Connection failed. Check link and network connection.");
@@ -747,15 +689,8 @@
           fetchSheetData(sheetUrl).finally(() => {
               if (isMounted) setLoading(false);
           });
-
-          const intervalId = setInterval(() => {
-              fetchSheetData(sheetUrl);
-          }, 60000);
-
-          return () => {
-              isMounted = false;
-              clearInterval(intervalId);
-          };
+          const intervalId = setInterval(() => fetchSheetData(sheetUrl), 60000);
+          return () => { isMounted = false; clearInterval(intervalId); };
         }
       }, [sheetUrl, fetchSheetData]);
 
@@ -766,7 +701,6 @@
         );
       }, [fleetData, searchTerm]);
 
-      // All remaining active units are considered the Flippy-3 Fleet
       const flippy3 = filteredData;
 
       const availableBrands = useMemo(() => {
@@ -784,7 +718,6 @@
         const start = new Date(2025, 9, 1);
         const now = new Date();
         const end = now > new Date(2026, 1, 1) ? now : new Date(2026, 1, 1);
-        
         let curr = new Date(start);
         while (curr <= end) {
             options.push(curr.toLocaleString('default', { month: 'long', year: 'numeric' }));
@@ -814,7 +747,6 @@
 
       return (
         <div className="flex h-screen bg-[#A7A1AF] text-slate-900 font-sans overflow-hidden font-['Roboto'] relative">
-          
           {showRotatePrompt && (
             <div className="fixed inset-0 z-[60] bg-slate-950/95 flex flex-col items-center justify-center p-8 text-center text-white">
                <RotateCw className="w-16 h-16 text-[#5d3181] mb-6 animate-pulse" />
@@ -875,11 +807,9 @@
             </nav>
 
             <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 bg-slate-950 pb-24 md:pb-8">
-                
                 {activeTab === 'dashboard' && (
                     <>
                         <FleetStatusBar fleet={displayFlippy3} />
-                        
                         <section>
                             <div className="mb-4 border-b border-slate-800 pb-3">
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -894,7 +824,7 @@
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                       <span className="text-[10px] font-bold text-slate-500 uppercase">Customer Brand:</span>
+                                       <span className="text-[10px] font-bold text-slate-500 uppercase hidden sm:block">Customer Brand:</span>
                                        <select 
                                           value={selectedBrand}
                                           onChange={(e) => setSelectedBrand(e.target.value)}
@@ -944,11 +874,6 @@
                                                 </td>
                                             </tr>
                                         ))}
-                                        {fleetData.filter(site => site.incidents && !site.incidents.toLowerCase().includes('n/a') && !site.incidents.toLowerCase().includes('none') && site.incidents.trim() !== '').length === 0 && (
-                                            <tr>
-                                                <td colSpan="3" className="px-6 py-12 text-center text-slate-500 italic">No active incidents reported across the fleet.</td>
-                                            </tr>
-                                        )}
                                     </tbody>
                                 </table>
                             </div>
@@ -990,11 +915,6 @@
                                                 </td>
                                             </tr>
                                         ))}
-                                        {fleetData.filter(site => site.slotRate > 0 || site.inputRate > 0).length === 0 && (
-                                            <tr>
-                                                <td colSpan="4" className="px-6 py-12 text-center text-slate-500 italic">No active disabilities reported across the fleet.</td>
-                                            </tr>
-                                        )}
                                     </tbody>
                                 </table>
                             </div>
@@ -1010,7 +930,6 @@
 
                 {activeTab === 'map' && (
                    <div className="h-full w-full flex flex-col md:flex-row gap-4">
-                      {/* LEFT LIST PANEL */}
                       <div className="w-full md:w-1/3 min-w-[300px] bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden flex flex-col h-[300px] md:h-auto order-1 md:order-none">
                           <div className="p-4 border-b border-slate-800 font-['Bebas_Neue'] text-xl text-white tracking-wide">Locations</div>
                           <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
@@ -1022,8 +941,6 @@
                               ))}
                           </div>
                       </div>
-                      
-                      {/* RIGHT MAP PANEL */}
                       <div className="flex-1 rounded-2xl overflow-hidden border border-slate-800 shadow-sm relative h-[400px] md:h-auto order-2 md:order-none">
                           <FleetMap data={fleetData} onSelectSite={(s) => { setSelectedSite(s); setHistoryFilterMonth('All'); }} />
                       </div>
@@ -1038,7 +955,6 @@
             </div>
           </main>
 
-          {/* DETAIL MODAL */}
           {selectedSite && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
                <div className="bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-800">
@@ -1070,7 +986,6 @@
                           </div>
                       </div>
                       
-                      {/* DATA RANGE BANNER (INDIVIDUAL SITE) */}
                       <div className="flex items-center gap-2 mb-2 ml-1">
                          <CalendarClock className="w-4 h-4 text-[#a855f7]" />
                          <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Data Range: Last 7 Days</span>
@@ -1203,7 +1118,7 @@
     }
 
     const root = ReactDOM.createRoot(document.getElementById("root"));
-    root.render(<App />);
+    root.render(<FlippyFleetCRM />);
   </script>
 </body>
 </html>
