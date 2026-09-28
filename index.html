@@ -822,33 +822,61 @@
                 )}
 
                 {activeTab === 'incidents' && (
-                    <div className="max-w-5xl mx-auto">
-                        <div className="flex items-center gap-3 mb-6">
+                <div className="max-w-5xl mx-auto">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                        <div className="flex items-center gap-3">
                             <div className="p-3 bg-red-900/30 rounded-xl border border-red-500/30"><AlertTriangle className="w-6 h-6 text-red-500" /></div>
                             <h2 className="text-xl md:text-2xl font-bold text-white font-['Bebas_Neue'] tracking-wide">Active Incidents</h2>
                         </div>
-                        <div className="bg-slate-900 rounded-2xl shadow-sm border border-slate-800 overflow-hidden">
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm text-left text-slate-300 min-w-[600px]">
-                                    <thead className="bg-slate-800 text-slate-400 font-medium border-b border-slate-700 font-['Bebas_Neue'] text-lg tracking-wide">
-                                        <tr><th className="px-4 md:px-6 py-4 font-normal">Site Name</th><th className="px-4 md:px-6 py-4 font-normal">Status</th><th className="px-4 md:px-6 py-4 font-normal">Active Incident(s)</th></tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-800">
-                                        {fleetData.filter(site => site.incidents && !site.incidents.toLowerCase().includes('n/a') && !site.incidents.toLowerCase().includes('none') && site.incidents.trim() !== '').map((site) => (
-                                            <tr key={site.id} className="hover:bg-slate-800/50 transition-colors">
-                                                <td className="px-4 md:px-6 py-4"><button onClick={() => { setSelectedSite(site); setHistoryFilterMonth('All'); }} className="font-bold text-white hover:text-[#5d3181] hover:underline text-left">{site.site}</button></td>
-                                                <td className="px-4 md:px-6 py-4"><StatusBadge status={site.status} /></td>
-                                                <td className="px-4 md:px-6 py-4 max-w-md">
-                                                    <div className="flex items-start gap-2 text-orange-400 bg-orange-900/20 px-2 py-2 rounded border border-orange-900/50">
-                                                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                                                        <div className="flex-1">{site.incidents.split('|').filter(s => s.trim() !== '').map((inc,i) => <div key={i}>{inc.trim()}</div>)}</div>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                        {fleetData.filter(site => site.incidents && !site.incidents.toLowerCase().includes('n/a') && !site.incidents.toLowerCase().includes('none') && site.incidents.trim() !== '').length === 0 && (
-                                            <tr><td colSpan="3" className="px-6 py-12 text-center text-slate-500 italic">No active incidents reported across the fleet.</td></tr>
-                                        )}
+                        <div className="flex items-center gap-2">
+                           <span className="text-[10px] font-bold text-slate-500 uppercase hidden sm:block">Customer Brand:</span>
+                           <select 
+                              value={selectedBrand}
+                              onChange={(e) => setSelectedBrand(e.target.value)}
+                              className={`bg-slate-900 border border-slate-700 text-xs rounded p-1.5 font-bold focus:outline-none focus:border-[#5d3181] ${getBrandColor(selectedBrand)}`}
+                           >
+                             {availableBrands.map(b => <option key={b} value={b} className={getBrandColor(b)}>{b}</option>)}
+                           </select>
+                        </div>
+                    </div>
+                    <div className="bg-slate-900 rounded-2xl shadow-sm border border-slate-800 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left text-slate-300 min-w-[600px]">
+                                <thead className="bg-slate-800 text-slate-400 font-medium border-b border-slate-700 font-['Bebas_Neue'] text-lg tracking-wide">
+                                    <tr>
+                                        <th className="px-4 md:px-6 py-4 font-normal">Site Name</th>
+                                        <th className="px-4 md:px-6 py-4 font-normal">Status</th>
+                                        <th className="px-4 md:px-6 py-4 font-normal">Active Incident(s)</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800">
+                                    {displayFlippy3.filter(site => site.incidents && !site.incidents.toLowerCase().includes('n/a') && !site.incidents.toLowerCase().includes('none') && site.incidents.trim() !== '').map((site) => (
+                                        <tr key={site.id} className="hover:bg-slate-800/50 transition-colors">
+                                            <td className="px-4 md:px-6 py-4">
+                                                <button onClick={() => { setSelectedSite(site); setHistoryFilterMonth('All'); }} className="font-bold text-white hover:text-[#5d3181] hover:underline text-left">
+                                                    {site.site}
+                                                </button>
+                                            </td>
+                                            <td className="px-4 md:px-6 py-4"><StatusBadge status={site.status} /></td>
+                                            <td className="px-4 md:px-6 py-4 max-w-md">
+                                                <div className="flex items-start gap-2 text-sky-400 bg-sky-900/20 px-2 py-2 rounded border border-sky-900/50">
+                                                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                                                    <div className="flex-1">{site.incidents.split('|').filter(s => s.trim() !== '').map((inc,i) => <div key={i}>{inc.trim()}</div>)}</div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {displayFlippy3.filter(site => site.incidents && !site.incidents.toLowerCase().includes('n/a') && !site.incidents.toLowerCase().includes('none') && site.incidents.trim() !== '').length === 0 && (
+                                        <tr>
+                                            <td colSpan="3" className="px-6 py-12 text-center text-slate-500 italic">No active incidents reported across the fleet.</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
                                     </tbody>
                                 </table>
                             </div>
@@ -999,17 +1027,17 @@
                       </div>
 
                       <div className="bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-700">
-                          <h3 className="font-bold text-slate-200 mb-4 flex items-center gap-2 font-['Bebas_Neue'] tracking-wide text-xl"><ClipboardList className="w-4 h-4 text-slate-400"/> Active Incidents</h3>
-                          {(!selectedSite.incidents || selectedSite.incidents.toLowerCase().includes('n/a') || selectedSite.incidents.toLowerCase().includes('none') || selectedSite.incidents.trim() === '') ?
-                            <div className="p-4 bg-emerald-900/20 text-emerald-400 rounded-lg flex items-center gap-3 text-sm border border-emerald-900/50"><CheckCircle2 className="w-4 h-4"/> All systems normal.</div> :
-                            <div className="p-5 bg-orange-900/20 text-orange-300 rounded-lg flex items-start gap-3 text-sm border border-orange-900/50">
-                                <AlertTriangle className="w-5 h-5 shrink-0 text-orange-500"/>
-                                <div className="flex-1">{selectedSite.incidents.split('|').filter(s => s.trim() !== '').map((inc, i) => <div key={i} className={i>0?"mt-2 pt-2 border-t border-orange-800/30":""}>{inc.trim()}</div>)}</div>
-                            </div>
-                          }
-                      </div>
+                      <h3 className="font-bold text-slate-200 mb-4 flex items-center gap-2 font-['Bebas_Neue'] tracking-wide text-xl"><ClipboardList className="w-4 h-4 text-slate-400"/> Active Incidents</h3>
+                      {(!selectedSite.incidents || selectedSite.incidents.toLowerCase().includes('n/a') || selectedSite.incidents.toLowerCase().includes('none') || selectedSite.incidents.trim() === '') ?
+                        <div className="p-4 bg-emerald-900/20 text-emerald-400 rounded-lg flex items-center gap-3 text-sm border border-emerald-900/50"><CheckCircle2 className="w-4 h-4"/> All systems normal.</div> :
+                        <div className="p-5 bg-sky-900/20 text-sky-300 rounded-lg flex items-start gap-3 text-sm border border-sky-900/50">
+                            <AlertTriangle className="w-5 h-5 shrink-0 text-sky-500"/>
+                            <div className="flex-1">{selectedSite.incidents.split('|').filter(s => s.trim() !== '').map((inc, i) => <div key={i} className={i>0?"mt-2 pt-2 border-t border-sky-800/30":""}>{inc.trim()}</div>)}</div>
+                        </div>
+                      }
+                  </div>
 
-                      <div className="bg-slate-800 p-6 rounded-2xl shadow-sm border border-[#5d3181]/50 relative overflow-hidden">
+                  <div className="bg-slate-800 p-6 rounded-2xl shadow-sm border border-[#5d3181]/50 relative overflow-hidden">
                           <div className="absolute top-0 right-0 w-24 h-24 bg-[#5d3181]/10 rounded-bl-full pointer-events-none"></div>
                           <h3 className="font-bold text-slate-200 mb-4 flex items-center gap-2 relative z-10 font-['Bebas_Neue'] tracking-wide text-xl"><Calendar className="w-4 h-4 text-slate-400"/> Upcoming Events</h3>
                           {(!selectedSite.upcoming || selectedSite.upcoming === '' || selectedSite.upcoming.trim() === '') ? 
