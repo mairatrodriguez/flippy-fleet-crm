@@ -38,7 +38,7 @@
       -webkit-tap-highlight-color: transparent;
       font-family: 'Roboto', sans-serif;
     }
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: rgba(30, 41, 59, 0.5); border-radius: 4px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(71, 85, 105, 0.8); border-radius: 4px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 1); }
@@ -87,6 +87,7 @@
     const MAIN_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQeMrZAlTI97lnuFD2Wa6Pbyvrzsg6odRNrL6XxvavRtdRMBvQBSTpqEW_pqhS-3UZp_BIrVFDlvwy8/pub?gid=0&single=true&output=csv';
     const CONFIG_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQeMrZAlTI97lnuFD2Wa6Pbyvrzsg6odRNrL6XxvavRtdRMBvQBSTpqEW_pqhS-3UZp_BIrVFDlvwy8/pub?gid=1296736855&single=true&output=csv';
 
+    // --- DATA PARSERS ---
     const parseUpcomingDate = (text) => {
        if (!text || typeof text !== 'string') return { hasDate: false, cleanText: String(text || '') };
        const match = text.match(/(\d{4})-(\d{2})-(\d{2})/);
@@ -496,8 +497,6 @@
       );
     }
 
-    
-    // Core CSV to Array parser (safe for quotes)
     const rawCSVToArray = (text) => {
         if (!text || typeof text !== 'string') return [];
         const rows = [];
@@ -557,8 +556,7 @@
                 } else if (headerLower.includes('hardware')) {
                     hardware.push(item);
                 } else {
-                    // Fallback to hardware if ambiguous
-                    hardware.push(item);
+                    hardware.push(item); // default to hardware if unknown
                 }
             }
             
@@ -661,6 +659,7 @@
       const [selectedSite, setSelectedSite] = useState(null);
       const [historyFilterMonth, setHistoryFilterMonth] = useState('All');
       const [selectedBrand, setSelectedBrand] = useState('All');
+      const [configViewType, setConfigViewType] = useState('software'); // For the new Config Hub
 
       const [fleetData, setFleetData] = useState([]);
       const [loading, setLoading] = useState(false);
@@ -715,7 +714,7 @@
             
             if (parsedMain.length === 0) throw new Error('Connected, but found 0 valid rows in main sheet.');
 
-            // Merge config data into main dataset based on Site Name
+            // Merge config data into main dataset
             const mergedData = parsedMain.map(site => {
                 const key = site.site.toLowerCase();
                 return {
@@ -763,6 +762,17 @@
         return options.reverse(); 
       }, []);
 
+      // Derive columns dynamically for the Fleet Config Tab
+      const configHeaders = useMemo(() => {
+          const headers = new Set();
+          displayFlippy3.forEach(site => {
+              if (site.config && site.config[configViewType]) {
+                  site.config[configViewType].forEach(item => headers.add(item.label));
+              }
+          });
+          return Array.from(headers);
+      }, [displayFlippy3, configViewType]);
+
       if (error) return (
           <div className="flex h-screen items-center justify-center bg-[#A7A1AF] flex-col gap-6 p-8 text-center font-['Roboto']">
               <WifiOff className="w-12 h-12 text-red-600" />
@@ -789,13 +799,14 @@
             </div>
           )}
 
-          <aside className="w-20 bg-black hidden md:flex flex-col items-center py-6 gap-6 z-20 shadow-xl border-r border-slate-800">
+          <aside className="w-20 bg-black hidden md:flex flex-col items-center py-6 gap-6 z-20 shadow-xl border-r border-slate-800 shrink-0">
             <div className="p-3 bg-[#5d3181] rounded-xl shadow-lg shadow-purple-900/40 mb-4"><Activity className="text-white w-6 h-6" /></div>
             <nav className="flex flex-col gap-4 w-full px-2">
               <NavButton icon={<LayoutGrid />} active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} label="Grid" />
-              <NavButton icon={<AlertTriangle />} active={activeTab === 'incidents'} onClick={() => setActiveTab('incidents')} label="Active Incidents" />
+              <NavButton icon={<AlertTriangle />} active={activeTab === 'incidents'} onClick={() => setActiveTab('incidents')} label="Incidents" />
               <NavButton icon={<Cpu />} active={activeTab === 'disabilities'} onClick={() => setActiveTab('disabilities')} label="Disabilities" />
-              <NavButton icon={<Calendar />} active={activeTab === 'events'} onClick={() => setActiveTab('events')} label="Upcoming Events" />
+              <NavButton icon={<Server />} active={activeTab === 'config'} onClick={() => setActiveTab('config')} label="Fleet Config" />
+              <NavButton icon={<Calendar />} active={activeTab === 'events'} onClick={() => setActiveTab('events')} label="Events" />
               <NavButton icon={<MapIcon />} active={activeTab === 'map'} onClick={() => setActiveTab('map')} label="Map" />
             </nav>
           </aside>
@@ -832,12 +843,14 @@
                 <MobileTab icon={<LayoutGrid />} active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} label="Grid" />
                 <MobileTab icon={<AlertTriangle />} active={activeTab === 'incidents'} onClick={() => setActiveTab('incidents')} label="Incidents" />
                 <MobileTab icon={<Cpu />} active={activeTab === 'disabilities'} onClick={() => setActiveTab('disabilities')} label="Disabilities" />
+                <MobileTab icon={<Server />} active={activeTab === 'config'} onClick={() => setActiveTab('config')} label="Config" />
                 <MobileTab icon={<Calendar />} active={activeTab === 'events'} onClick={() => setActiveTab('events')} label="Events" />
                 <MobileTab icon={<MapIcon />} active={activeTab === 'map'} onClick={() => setActiveTab('map')} label="Map" />
             </nav>
 
             <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 bg-slate-950 pb-24 md:pb-8">
                 
+                {}
                 {activeTab === 'dashboard' && (
                     <>
                         <FleetStatusBar fleet={displayFlippy3} />
@@ -868,11 +881,12 @@
                     </>
                 )}
 
+                {}
                 {activeTab === 'incidents' && (
                     <div className="max-w-5xl mx-auto">
                         <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
                             <div className="flex items-center gap-3">
-                                <div className="p-3 bg-red-900/30 rounded-xl border border-red-500/30"><AlertTriangle className="w-6 h-6 text-red-500" /></div>
+                                <div className="p-3 bg-sky-900/30 rounded-xl border border-sky-500/30"><AlertTriangle className="w-6 h-6 text-sky-500" /></div>
                                 <h2 className="text-xl md:text-2xl font-bold text-white font-['Bebas_Neue'] tracking-wide">Active Incidents</h2>
                             </div>
                             <div className="flex items-center gap-2">
@@ -921,6 +935,7 @@
                     </div>
                 )}
 
+                {}
                 {activeTab === 'disabilities' && (
                     <div className="max-w-5xl mx-auto">
                         <div className="flex items-center gap-3 mb-6">
@@ -967,6 +982,70 @@
                     </div>
                 )}
                 
+                {}
+                {activeTab === 'config' && (
+                    <div className="max-w-[1400px] mx-auto">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="p-3 bg-[#a855f7]/20 rounded-xl border border-[#a855f7]/30"><Server className="w-6 h-6 text-[#a855f7]" /></div>
+                                <h2 className="text-xl md:text-2xl font-bold text-white font-['Bebas_Neue'] tracking-wide">Fleet Configuration Hub</h2>
+                            </div>
+                            
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                                <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
+                                    <button onClick={() => setConfigViewType('software')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${configViewType === 'software' ? 'bg-[#5d3181] text-white shadow' : 'text-slate-400 hover:text-white'}`}>Software & UI</button>
+                                    <button onClick={() => setConfigViewType('hardware')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${configViewType === 'hardware' ? 'bg-[#5d3181] text-white shadow' : 'text-slate-400 hover:text-white'}`}>Hardware Config</button>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                   <span className="text-[10px] font-bold text-slate-500 uppercase hidden md:block">Customer Brand:</span>
+                                   <select value={selectedBrand} onChange={(e) => setSelectedBrand(e.target.value)} className={`bg-slate-900 border border-slate-700 text-xs rounded p-1.5 font-bold focus:outline-none focus:border-[#5d3181] ${getBrandColor(selectedBrand)}`}>
+                                     {availableBrands.map(b => <option key={b} value={b} className={getBrandColor(b)}>{b}</option>)}
+                                   </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-900 rounded-2xl shadow-sm border border-slate-800 overflow-hidden relative">
+                            <div className="overflow-x-auto custom-scrollbar relative">
+                                <table className="w-full text-sm text-left text-slate-300 whitespace-nowrap min-w-[800px]">
+                                    <thead className="bg-slate-800 text-slate-400 font-medium border-b border-slate-700 font-['Bebas_Neue'] text-lg tracking-wide">
+                                        <tr>
+                                            <th className="px-6 py-4 font-normal sticky left-0 bg-slate-800 z-20 shadow-[2px_0_5px_rgba(0,0,0,0.2)]">Site Name</th>
+                                            {configHeaders.map(h => (
+                                                <th key={h} className="px-4 py-4 font-normal whitespace-nowrap">{h}</th>
+                                            ))}
+                                            {configHeaders.length === 0 && <th className="px-4 py-4 font-normal italic">No config data found in sheet.</th>}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800">
+                                        {displayFlippy3.map(site => (
+                                            <tr key={site.id} className="hover:bg-slate-800/80 transition-colors group">
+                                                <td className="px-6 py-3 sticky left-0 bg-slate-900 group-hover:bg-slate-800 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.2)] transition-colors border-r border-transparent group-hover:border-slate-700">
+                                                    <button onClick={() => { setSelectedSite(site); setHistoryFilterMonth('All'); }} className="font-bold text-white hover:text-[#a855f7] hover:underline text-left block w-full truncate max-w-[150px]">
+                                                        {site.site}
+                                                    </button>
+                                                </td>
+                                                {configHeaders.map(h => {
+                                                    const valObj = site.config?.[configViewType]?.find(item => item.label === h);
+                                                    const val = valObj ? valObj.value : '-';
+                                                    return (
+                                                        <td key={h} className="px-4 py-3 text-[13px]" title={val}>
+                                                            {val.length > 25 ? val.substring(0, 25) + '...' : val}
+                                                        </td>
+                                                    );
+                                                })}
+                                                {configHeaders.length === 0 && <td className="px-4 py-3">-</td>}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {}
                 {activeTab === 'events' && <div className="max-w-6xl mx-auto h-full"><CalendarView fleetData={fleetData} /></div>}
 
                 {activeTab === 'map' && (
@@ -996,6 +1075,7 @@
             </div>
           </main>
 
+          {}
           {selectedSite && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
                <div className="bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-800">
@@ -1077,6 +1157,7 @@
                         }
                       </div>
 
+                      {}
                       {selectedSite.config && (selectedSite.config.software.length > 0 || selectedSite.config.hardware.length > 0) && (
                           <div className="bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-700">
                               <h3 className="font-bold text-slate-200 mb-6 flex items-center gap-2 font-['Bebas_Neue'] tracking-wide text-xl">
