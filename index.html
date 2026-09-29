@@ -551,12 +551,13 @@
                 const item = { label, value };
                 
                 const headerLower = headerRaw.toLowerCase();
-                if (headerLower.includes('software') || headerLower.includes('ui') || headerLower.includes('tablet')) {
-                    software.push(item);
-                } else if (headerLower.includes('hardware')) {
+                
+                // STRICT RULE: If the column header starts with "Hardware", it goes to the Hardware tab.
+                // Otherwise (Columns B-G), it goes to the Software & UI tab.
+                if (headerLower.startsWith('hardware')) {
                     hardware.push(item);
                 } else {
-                    hardware.push(item); // default to hardware if unknown
+                    software.push(item);
                 }
             }
             
